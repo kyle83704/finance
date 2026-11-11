@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roth Conversion Simulator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <h1>💰 Roth Conversion Simulator</h1>
+                    <p>Optimize your retirement strategy</p>
+                </div>
+                <div class="header-actions">
+                    <button class="btn-icon" title="Help" onclick="showHelp()">❓</button>
+                    <button class="btn-secondary" onclick="clearSession()">New Session</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Navigation Tabs -->
+            <nav class="tab-navigation">
+                <button class="tab-btn active" data-tab="client" onclick="switchTab('client')">
+                    👤 Client Info
+                </button>
+                <button class="tab-btn" data-tab="accounts" onclick="switchTab('accounts')">
+                    💰 Accounts
+                </button>
+                <button class="tab-btn" data-tab="income" onclick="switchTab('income')">
+                    💵 Income
+                </button>
+                <button class="tab-btn" data-tab="expenses" onclick="switchTab('expenses')">
+                    📊 Expenses
+                </button>
+                <button class="tab-btn" data-tab="settings" onclick="switchTab('settings')">
+                    ⚙️ Settings
+                </button>
+                <button class="tab-btn" data-tab="results" onclick="switchTab('results')">
+                    📈 Results
+                </button>
+                <button class="tab-btn" data-tab="international" onclick="switchTab('international')">
+                    🌍 International Tax
+                </button>
+                <button class="tab-btn" data-tab="strategies" onclick="switchTab('strategies')">
+                    🎯 Advanced Strategies
+                </button>
+            </nav>
+
+            <!-- Content Panels -->
+            <div class="tab-content">
+                <!-- Client Info Tab -->
+                <div id="client" class="tab-panel active">
+                    <div class="panel-header">
+                        <h2>Client Information</h2>
+                        <p>Enter your personal and financial details</p>
+                    </div>
+                    
+                    <div class="form-container">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>First Name *</label>
+                                <input type="text" id="firstName" placeholder="John" value="John">
+                            </div>
+                            <div class="form-group">
+                                <label>Last Name *</label>
+                                <input type="text" id="lastName" placeholder="Smith" value="Smith">
+                            </div>
+                            <div class="form-group">
+                                <label>Birth Year *</label>
+                                <input type="number" id="birthYear" placeholder="1960" value="1960" min="1920" max="2023">
+                            </div>
+                            <div class="form-group">
+                                <label>Marital Status</label>
+                                <select id="maritalStatus" onchange="updateSpouseField()">
+                                    <option value="Single">Single</option>
+                                    <option value="Married">Married</option>
+                                    <option value="Divorced">Divorced</option>
+                                    <option value="Widowed">Widowed</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="spouseYearGroup" style="display:none;">
+                                <label>Spouse Birth Year</label>
+                                <input type="number" id="spouseBirthYear" placeholder="1962" min="1920" max="2023">
+                            </div>
+                            <div class="form-group">
+                                <label>State of Residence *</label>
+                                <select id="state">
+                                    <option value="">Select State</option>
+                                    <option value="AK">AK</option>
+                                    <option value="AL">AL</option>
+                                    <option value="AR">AR</option>
+                                    <option value="AZ">AZ</option>
+                                    <option value="CA">CA</option>
+                                    <option value="CO">CO</option>
+                                    <option value="CT">CT</option>
+                                    <option value="DC">DC</option>
+                                    <option value="DE">DE</option>
+                                    <option value="FL">FL</option>
+                                    <option value="GA">GA</option>
+                                    <option value="HI">HI</option>
+                                    <option value="IA">IA</option>
+                                    <option value="ID">ID</option>
+                                    <option value="IL">IL</option>
+                                    <option value="IN">IN</option>
+                                    <option value="KS">KS</option>
+                                    <option value="KY">KY</option>
+                                    <option value="LA">LA</option>
+                                    <option value="MA">MA</option>
+                                    <option value="MD">MD</option>
+                                    <option value="ME">ME</option>
+                                    <option value="MI">MI</option>
+                                    <option value="MN">MN</option>
+                                    <option value="MO">MO</option>
+                                    <option value="MS">MS</option>
+                                    <option value="MT">MT</option>
+                                    <option value="NC">NC</option>
+                                    <option value="ND">ND</option>
+                                    <option value="NE">NE</option>
+                                    <option value="NH">NH</option>
+                                    <option value="NJ">NJ</option>
+                                    <option value="NM">NM</option>
+                                    <option value="NV">NV</option>
+                                    <option value="NY">NY</option>
+                                    <option value="OH">OH</option>
+                                    <option value="OK">OK</option>
+                                    <option value="OR">OR</option>
+                                    <option value="PA">PA</option>
+                                    <option value="RI">RI</option>
+                                    <option value="SC">SC</option>
+                                    <option value="SD">SD</option>
+                                    <option value="TN">TN</option>
+                                    <option value="TX">TX</option>
+                                    <option value="UT">UT</option>
+                                    <option value="VA">VA</option>
+                                    <option value="VT">VT</option>
+                                    <option value="WA">WA</option>
+                                    <option value="WI">WI</option>
+                                    <option value="WV">WV</option>
+                                    <option value="WY">WY</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Filing Status</label>
+                                <select id="filingStatus">
+                                    <option value="Single">Single</option>
+                                    <option value="MFJ">Married Filing Jointly</option>
+                                    <option value="MFS">Married Filing Separately</option>
+                                    <option value="HOH">Head of Household</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button class="btn-primary" onclick="saveClient()">Save Client Info</button>
+                    </div>
+                    
+                    <div class="suggestions">
+                        <h3>💡 Smart Suggestions</h3>
+                        <div id="clientSuggestions"></div>
+                    </div>
+                </div>
+
+                <!-- Accounts Tab -->
+                <div id="accounts" class="tab-panel">
+                    <div class="panel-header">
+                        <h2>Financial Accounts</h2>
+                        <p>Track all retirement and investment accounts</p>
+                    </div>
+                    
+                    <div class="form-container">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Account Name</label>
+                                <input type="text" id="accountName" placeholder="e.g., Fidelity IRA">
+                            </div>
+                            <div class="form-group">
+                                <label>Account Type</label>
+                                <select id="accountType">
+                                    <option value="">Select Type</option>
+                                    <option value="Traditional IRA">Traditional IRA</option>
+                                    <option value="Roth IRA">Roth IRA</option>
+                                    <option value="SEP IRA">SEP IRA</option>
+                                    <option value="401k">401(k)</option>
+                                    <option value="Roth 401k">Roth 401(k)</option>
+                                    <option value="Taxable">Taxable Brokerage</option>
+                                    <option value="HSA">HSA</option>
+                                    <option value="529">529 Plan</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Current Balance ($)</label>
+                                <input type="number" id="accountBalance" placeholder="100000" min="0" step="1000">
+                            </div>
+                            <div class="form-group">
+                                <label>Annual Growth Rate (%)</label>
+                                <input type="number" id="accountGrowth" placeholder="7" min="0" max="100" step="0.1" value="7">
+                            </div>
+                        </div>
+                        <button class="btn-primary" onclick="addAccount()">Add Account</button>
+                    </div>
+                    
+                    <div class="accounts-list" id="accountsList"></div>
+                </div>
+
+                <!-- Income Tab -->
+                <div id="income" class="tab-panel">
+                    <div class="panel-header">
+                        <h2>Income Streams</h2>
+                        <p>Add all sources of annual income</p>
+                    </div>
+                    
+                    <div class="form-container">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Income Source</label>
+                                <input type="text" id="incomeSource" placeholder="e.g., Salary, Rental Income">
+                            </div>
+                            <div class="form-group">
+                                <label>Annual Amount ($)</label>
+                                <input type="number" id="incomeAmount" placeholder="100000" min="0" step="1000">
+                            </div>
+                            <div class="form-group">
+                                <label>Income Type</label>
+                                <select id="incomeType">
+                                    <option value="Ordinary">Ordinary Income</option>
+                                    <option value="Capital Gains">Long-term Capital Gains</option>
+                                    <option value="Qualified Dividends">Qualified Dividends</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Start Year</label>
+                                <input type="number" id="incomeStartYear" placeholder="2026" min="2026" max="2100" value="2026">
+                            </div>
+                        </div>
+                        <button class="btn-primary" onclick="addIncome()">Add Income Stream</button>
+                    </div>
+                    
+                    <div class="income-list" id="incomeList"></div>
+                </div>
+
+                <!-- Expenses Tab -->
+                <div id="expenses" class="tab-panel">
+                    <div class="panel-header">
+                        <h2>Annual Expenses</h2>
+                        <p>Track your retirement spending needs</p>
+                    </div>
+                    
+                    <div class="form-container">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Basic Living Expenses ($)</label>
+                                <input type="number" id="basicExpenses" placeholder="50000" min="0" step="1000" value="50000">
+                            </div>
+                            <div class="form-group">
+                                <label>Healthcare Expenses ($)</label>
+                                <input type="number" id="healthExpenses" placeholder="10000" min="0" step="1000" value="10000">
+                            </div>
+                            <div class="form-group">
+                                <label>Travel & Leisure ($)</label>
+                                <input type="number" id="travelExpenses" placeholder="15000" min="0" step="1000" value="15000">
+                            </div>
+                            <div class="form-group">
+                                <label>Annual Inflation Rate (%)</label>
+                                <input type="number" id="inflationRate" placeholder="2.5" min="0" max="10" step="0.1" value="2.5">
+                            </div>
+                        </div>
+                        <button class="btn-primary" onclick="saveExpenses()">Save Expenses</button>
+                    </div>
+                    
+                    <div class="suggestions">
+                        <h3>💡 Expense Suggestions</h3>
+                        <div id="expenseSuggestions"></div>
+                    </div>
+                </div>
+
+                <!-- Settings Tab -->
+                <div id="settings" class="tab-panel">
+                    <div class="panel-header">
+                        <h2>Simulation Settings</h2>
+                        <p>Configure your analysis parameters</p>
+                    </div>
+                    
+                    <div class="form-container">
+                        <h3>Projection Period</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Start Year</label>
+                                <input type="number" id="startYear" placeholder="2026" min="2026" max="2100" value="2026">
+                            </div>
+                            <div class="form-group">
+                                <label>End Year</label>
+                                <input type="number" id="endYear" placeholder="2055" min="2026" max="2150" value="2055">
+                            </div>
+                        </div>
+                        
+                        <h3>Tax Assumptions</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Federal Tax Rate (%)</label>
+                                <input type="number" id="federalRate" placeholder="24" min="0" max="100" step="0.1" value="24">
+                            </div>
+                            <div class="form-group">
+                                <label>State Tax Rate (%)</label>
+                                <input type="number" id="stateRate" placeholder="5" min="0" max="15" step="0.1" value="5">
+                            </div>
+                        </div>
+                        
+                        <h3>Investment Assumptions</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Default Annual Growth (%)</label>
+                                <input type="number" id="defaultGrowth" placeholder="7" min="0" max="20" step="0.1" value="7">
+                            </div>
+                            <div class="form-group">
+                                <label>Withdrawal Sequence</label>
+                                <select id="withdrawalSequence">
+                                    <option value="FIFO">FIFO (First In, First Out)</option>
+                                    <option value="LIFO">LIFO (Last In, First Out)</option>
+                                    <option value="Optimized">Optimized (Tax-Efficient)</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <h3>Optimization Goal</h3>
+                        <div class="form-group">
+                            <label>Primary Objective</label>
+                            <select id="optimizationGoal">
+                                <option value="max-inheritance">Maximize Inheritance</option>
+                                <option value="max-net-worth">Maximize Net Worth at 100</option>
+                                <option value="max-roth">Maximize Roth Account Value</option>
+                                <option value="min-taxes">Minimize Total Taxes Paid</option>
+                                <option value="smooth-income">Smooth Income Distribution</option>
+                                <option value="balanced">Balanced Approach</option>
+                            </select>
+                        </div>
+                        
+                        <button class="btn-primary" onclick="saveSettings()">Save Settings</button>
+                    </div>
+                </div>
+
+                <!-- Results Tab -->
+                <div id="results" class="tab-panel">
+                    <div class="panel-header">
+                        <h2>Analysis Results</h2>
+                        <p>Your personalized Roth conversion strategy</p>
+                    </div>
+                    
+                    <div class="results-actions">
+                        <button class="btn-primary" onclick="runAnalysis()">Run Analysis</button>
+                        <button class="btn-secondary" onclick="downloadReport()">Download Report</button>
+                    </div>
+                    
+                    <div id="resultsContent" class="results-content">
+                        <p style="text-align: center; color: #888; padding: 2rem;">Click "Run Analysis" to generate results</p>
+                    </div>
+                </div>
+
+                <!-- International Tax Tab -->
+                <div id="international" class="tab-panel">
+                    <div class="panel-header">
+                        <h2>International Tax Strategies</h2>
+                        <p>Explore tax optimization across borders</p>
+                    </div>
+                    
+                    <div class="form-container">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Country of Interest</label>
+                                <select id="countrySelect">
+                                    <option value="">Select Country</option>
+                                    <option value="Portugal">Portugal (NHR)</option>
+                                    <option value="Singapore">Singapore</option>
+                                    <option value="Hong Kong">Hong Kong</option>
+                                    <option value="UAE">UAE (Dubai)</option>
+                                    <option value="Panama">Panama</option>
+                                    <option value="Mexico">Mexico</option>
+                                    <option value="Costa Rica">Costa Rica</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button class="btn-primary" onclick="viewInternationalStrategies()">View All Strategies</button>
+                        <button class="btn-secondary" onclick="compareInternationalTaxes()">Compare Tax Savings</button>
+                    </div>
+                    
+                    <div id="intlStrategiesContent" style="margin-top: 2rem;"></div>
+                </div>
+
+                <!-- Advanced Strategies Tab -->
+                <div id="strategies" class="tab-panel">
+                    <div class="panel-header">
+                        <h2>Advanced Strategies</h2>
+                        <p>Explore sophisticated retirement planning techniques</p>
+                    </div>
+                    
+                    <!-- Backdoor Roth -->
+                    <div class="strategy-section">
+                        <h3>🚪 Backdoor Roth IRA</h3>
+                        <p>Convert Traditional IRA to Roth if income exceeds limits</p>
+                        
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Non-Deductible Contribution</label>
+                                <input type="number" id="backdoorAmount" placeholder="7000" min="0" step="1000" value="7000">
+                            </div>
+                            <div class="form-group">
+                                <label>Pre-Tax IRA Balance</label>
+                                <input type="number" id="pretaxIRABalance" placeholder="500000" min="0" step="1000">
+                            </div>
+                        </div>
+                        
+                        <button class="btn-primary" onclick="calculateBackdoorRoth()">Calculate Pro-Rata Impact</button>
+                        <div id="backdroorResults" style="margin-top: 1rem;"></div>
+                    </div>
+
+                    <!-- Mega Backdoor Roth -->
+                    <div class="strategy-section">
+                        <h3>💰 Mega Backdoor Roth</h3>
+                        <p>Contribute up to $69,000 after-tax to 401(k)</p>
+                        
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Salary</label>
+                                <input type="number" id="megaSalary" placeholder="150000" min="0" step="1000">
+                            </div>
+                            <div class="form-group">
+                                <label>Employer Match (if any)</label>
+                                <input type="number" id="megaMatch" placeholder="0" min="0" step="1000">
+                            </div>
+                        </div>
+                        
+                        <button class="btn-primary" onclick="calculateMegaBackdoor()">Calculate Max Contribution</button>
+                        <div id="megaResults" style="margin-top: 1rem;"></div>
+                    </div>
+
+                    <!-- Solo 401k -->
+                    <div class="strategy-section">
+                        <h3>🏢 Solo 401(k) Planning</h3>
+                        <p>For self-employed and small business owners</p>
+                        
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Net Self-Employment Income</label>
+                                <input type="number" id="solo401kIncome" placeholder="100000" min="0" step="1000">
+                            </div>
+                        </div>
+                        
+                        <button class="btn-primary" onclick="calculateSolo401k()">Calculate Max Contribution</button>
+                        <div id="solo401kResults" style="margin-top: 1rem;"></div>
+                    </div>
+
+                    <!-- Asset Location -->
+                    <div class="strategy-section">
+                        <h3>📍 Asset Location Optimization</h3>
+                        <p>Place assets in tax-efficient account types</p>
+                        
+                        <div class="info-box">
+                            <h4>Recommended Placement:</h4>
+                            <ul style="margin-left: 2rem; margin-top: 1rem;">
+                                <li><strong>Roth IRA:</strong> High-growth stocks, aggressive funds</li>
+                                <li><strong>Traditional IRA:</strong> Tax-inefficient bonds, REITs</li>
+                                <li><strong>Taxable Account:</strong> Index funds, tax-loss harvesting</li>
+                                <li><strong>HSA:</strong> Long-term medical expenses (triple tax advantage)</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>&copy; 2024 Roth Conversion Simulator. All rights reserved.</p>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.coverage
+
+# Packaging output
+build/
+dist/
+*.exe
+freeze_probe.spec
+main_debug.spec
+
+# Generated analyses and reports
+example_strategy_detail.csv
+*_roth_report.html
+*_roth_report.xlsx
+
+# Local tooling / logs
+.freebuff/
+*.log
+.env
+.env.*
+
+# Editor / manual backups
+*.bak
