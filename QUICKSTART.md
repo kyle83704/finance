@@ -16,7 +16,8 @@ python example_analysis.py
 ```
 
 The script builds a sample retired couple, compares four objectives, prints the
-comparison and rankings, and writes `example_strategy_detail.csv`.
+comparison and rankings with tax liability and tax actually paid, and writes
+`example_strategy_detail.csv`.
 
 ## 3. Run the desktop app
 
@@ -27,18 +28,21 @@ python main.py
 The wizard asks for:
 
 1. **Client** — names, birth year, spouse, state and filing status.
-2. **Accounts** — balance, type, basis, growth rate and annual contribution.
+2. **Accounts** — balance, type, pre-tax/after-tax basis, taxable cost basis,
+   growth rate and annual contribution.
 3. **Income** — Social Security, pension, work or dividends, with ages and COLA.
 4. **Expenses** — annual spending by category; totals update as you type.
-5. **Scenarios** — objectives and projection window.
+5. **Scenarios** — objectives, projection window, tax-funding source, external
+   funding cap and deferred-tax assumption.
 
 Click **Run Analysis**. The results window shows:
 
-- **Comparison** — conversions, total taxes, IRMAA, final Roth/pre-tax/taxable
-  values, final net worth and net after all taxes.
+- **Comparison** — conversions, tax liability, tax paid, unpaid tax, IRMAA,
+  final Roth/pre-tax/taxable values, final net worth, deferred reserve and net
+  after all taxes.
 - **Chart** — final net worth by strategy, with Penny's pick in gold.
 - **Detail View** — year-by-year RMD, taxable Social Security, conversion,
-  MAGI, IRMAA and balance columns.
+  MAGI, IRMAA, tax liability/paid/unpaid, spending and reconciliation columns.
 - **HTML Report**, **Excel Report**, **Export to CSV**, **Save Project**.
 
 ## 4. Run the tests
@@ -47,11 +51,12 @@ Click **Run Analysis**. The results window shows:
 python -m unittest discover tests -v
 ```
 
-Expected result: **90 tests, 0 failures**.
+Expected result: **98 tests, 0 failures**.
 
-The suite covers tax brackets, incremental conversion tax, RMD withdrawal,
-pro-rata basis, scenario isolation, objective policies, persistence, the HTML
-and Excel reports, the mascot and the GUI helpers.
+The suite covers tax brackets, incremental conversion and gain tax, RMD
+withdrawal, pro-rata basis, scenario isolation, objective policies, cash-flow
+reconciliation, funding sources, external caps, deferred tax, the rule
+registry, persistence, the HTML/Excel reports, the mascot and GUI helpers.
 
 ## 5. Build the executable
 
@@ -76,17 +81,29 @@ full table and assumptions.
 
 ## What the numbers mean
 
-- **Total Taxes Paid** includes income tax on income and RMDs, incremental tax
-  on conversions, and IRMAA.
-- **Net After All Taxes** subtracts that lifetime tax total from gross final net
-  worth once.
+- **Tax Liability** includes income tax on income and RMDs, incremental tax on
+  conversions, gain tax and IRMAA.
+- **Tax Paid** is how much of that liability was actually funded. **Tax Unpaid**
+  is the remainder.
+- **Net After All Taxes** subtracts unpaid tax and a deferred-tax reserve on
+  remaining pre-tax balances. Taxes already paid from assets are not subtracted
+  again.
 - **RMD Required** is a mandatory withdrawal, never a voluntary conversion.
 - **Conversion** is the additional amount moved to Roth after the RMD.
+- **Spending Shortfall** means cash and taxable assets did not cover expenses;
+  the simulator reports it rather than inventing a funding source.
+
+## Tax-funding choices
+
+- **Cash** — use cash, then Roth withholding if necessary.
+- **Withhold from conversion** — reduce the Roth conversion first.
+- **Sell taxable assets** — realize gains using the cost basis you entered.
+- **External funds** — use only the amount you explicitly enter; it is capped.
 
 ## Reports
 
-- **HTML Report** is a single self-contained file. Open it in a browser and use
-  Print → Save as PDF for a PDF copy.
+- **HTML Report** is a single self-contained file with the comparison, annual
+  detail and the rule/assumption registry. Use Print → Save as PDF for a PDF.
 - **Excel Report** contains summary, comparison, yearly detail and the chart.
 - **CSV** is raw year-by-year data for further analysis.
 
@@ -120,5 +137,5 @@ virtual environment. Do not weaken assertions to make a failure disappear.
 
 The simulator is an educational estimate. It uses simplified flat state taxes,
 2026 federal parameters indexed after 2026, a two-year IRMAA MAGI replay when
-the projection covers the lookback, and does not deduct living expenses from
-modeled accounts. It is not a substitute for a CPA or financial adviser.
+the projection covers the lookback, and does not automatically fund spending
+from pre-tax accounts. It is not a substitute for a CPA or financial adviser.

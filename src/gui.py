@@ -230,7 +230,7 @@ class RothSimulatorGUI:
                         tooltip='Explain Roth conversions, IRMAA and RMDs'),
              _danger('Exit', size=(14, 1), key='exit')],
             [sg.Text('')],
-            [sg.Text('Version 2.2 · Tax Pro edition · 2026 law, Social Security, IRMAA and RMD modelling',
+            [sg.Text('Version 2.3 · Ledger edition · cash-flow accounting, tax funding and 2026 law',
                      font=SMALL_FONT, text_color=FAINT_TEXT)],
         ]
 
@@ -521,6 +521,9 @@ class RothSimulatorGUI:
             _field('Current Balance', sg.Input(key='acc_balance', size=(26,), font=BODY_FONT)),
             _field('Pre-tax Basis', sg.Input(key='acc_pretax', size=(26,), font=BODY_FONT)),
             _field('After-tax Basis', sg.Input(key='acc_aftertax', size=(26,), font=BODY_FONT)),
+            _field('Taxable Cost Basis', sg.Input(key='acc_cost_basis', size=(26,),
+                                                 font=BODY_FONT,
+                                                 tooltip='Original cost of taxable holdings; used to calculate realized gains.')),
             _field('Expected Growth %', sg.Input('7.0', key='acc_growth', size=(26,),
                                                 font=BODY_FONT,
                                                 tooltip='Average annual return, e.g. 7 for 7%')),
@@ -556,6 +559,7 @@ class RothSimulatorGUI:
                     balance = float(values['acc_balance'])
                     pretax = float(values['acc_pretax']) if values['acc_pretax'] else 0.0
                     aftertax = float(values['acc_aftertax']) if values['acc_aftertax'] else 0.0
+                    cost_basis = float(values['acc_cost_basis']) if values['acc_cost_basis'] else 0.0
                     growth = float(values['acc_growth']) / 100
                     contrib = float(values['acc_contrib']) if values['acc_contrib'] else 0.0
 
@@ -569,12 +573,18 @@ class RothSimulatorGUI:
                                        title='Invalid Input', font=BODY_FONT)
                         continue
 
+                    if cost_basis < 0 or cost_basis > balance:
+                        sg.popup_error('Taxable cost basis must be between zero and the balance',
+                                       title='Invalid Input', font=BODY_FONT)
+                        continue
+
                     account = Account(
                         name=name,
                         account_type=acc_type,
                         current_balance=balance,
                         pretax_basis=pretax,
                         aftertax_basis=aftertax,
+                        cost_basis=cost_basis,
                         growth_rate=growth,
                         annual_contribution=contrib,
                     )
@@ -592,6 +602,7 @@ class RothSimulatorGUI:
                     window['acc_balance'].update('')
                     window['acc_pretax'].update('')
                     window['acc_aftertax'].update('')
+                    window['acc_cost_basis'].update('')
                     window['acc_growth'].update('7.0')
                     window['acc_contrib'].update('0')
 
@@ -789,6 +800,19 @@ class RothSimulatorGUI:
              sg.Input(str(current_year), key='start_year', size=(10,), font=BODY_FONT),
              sg.Text('To Year:', size=(10,), font=BODY_FONT),
              sg.Input(str(current_year + 29), key='end_year', size=(10,), font=BODY_FONT)],
+            [sg.Text('Tax Funding', size=(15,), font=SECTION_FONT),
+             sg.Text('How should taxes be paid?', font=BODY_FONT, text_color=MUTED_TEXT)],
+            [sg.Text('Payment source:', size=(26,), font=BODY_FONT),
+             sg.Combo(['Cash', 'Withhold from conversion', 'Sell taxable assets',
+                       'External funds'], key='tax_source', default_value='Cash',
+                      readonly=True, size=(28,), font=BODY_FONT)],
+            [sg.Text('External funds available ($/yr):', size=(26,), font=BODY_FONT),
+             sg.Input('0', key='external_funding', size=(14,), font=BODY_FONT)],
+            [sg.Text('Deferred tax on remaining pre-tax (%):', size=(26,), font=BODY_FONT),
+             sg.Input('22', key='deferred_rate', size=(14,), font=BODY_FONT)],
+            [sg.Text('External funds are used only when explicitly entered; '
+                     'the simulator never assumes unlimited outside cash.',
+                     font=SMALL_FONT, text_color=MUTED_TEXT)],
             [sg.Text('')],
             [_primary('Run Analysis', key='run', size=(15, 1)),
              _danger('Cancel', key='cancel', size=(12, 1))],
@@ -822,12 +846,28 @@ class RothSimulatorGUI:
                                        title='Invalid Period', font=BODY_FONT)
                         continue
 
+                    source_map = {
+                        'Cash': 'cash',
+                        'Withhold from conversion': 'withhold',
+                        'Sell taxable assets': 'taxable',
+                        'External funds': 'external',
+                    }
+                    external_funding = float(values['external_funding'] or 0)
+                    deferred_rate = float(values['deferred_rate'] or 22) / 100.0
+                    if external_funding < 0 or not 0 <= deferred_rate <= 1:
+                        sg.popup_error('Tax funding and deferred rate must be valid non-negative values',
+                                       title='Invalid Input', font=BODY_FONT)
+                        continue
+
                     # Build policy-driven scenarios through the optimizer so
                     # every objective gets its documented conversion behavior.
                     base_scenario = ScenarioSettings(
                         name="Base",
                         start_year=start_year,
                         end_year=end_year,
+                        tax_payment_source=source_map[values['tax_source']],
+                        external_tax_funding=external_funding,
+                        deferred_tax_rate=deferred_rate,
                     )
                     optimizer = ConversionOptimizer(self.client)
                     scenarios = optimizer.generate_scenarios(
@@ -937,9 +977,9 @@ class RothSimulatorGUI:
                    f"${best.final_net_worth:,.0f}")
 
         thrifty = min(self.strategies,
-                      key=lambda s: s.total_taxes_paid)
-        tax_summary = (f"Lowest lifetime tax: {thrifty.scenario.name} · "
-                       f"${thrifty.total_taxes_paid:,.0f}")
+                      key=lambda s: s.total_tax_liability)
+        tax_summary = (f"Lowest lifetime tax liability: {thrifty.scenario.name} · "
+                       f"${thrifty.total_tax_liability:,.0f}")
         mascot = _mascot_image(110)
         summary_cells = [
             [sg.Text('Penny’s pick', font=('Segoe UI', 9, 'bold'),
@@ -998,10 +1038,11 @@ class RothSimulatorGUI:
                 title_color=MUTED_TEXT,
                 border_width=0,
             )],
-            [sg.Text('Total Taxes Paid includes income tax, taxable Social '
-                     'Security, RMD tax, conversion tax and IRMAA. IRMAA uses '
-                     'the two-year MAGI lookback. Save the project, export '
-                     'HTML/Excel reports, or send year-by-year detail to CSV.',
+            [sg.Text('Tax liability includes income tax, taxable Social '
+                     'Security, RMD tax, conversion tax, realized gains and IRMAA. '
+                     'Tax paid shows how much was actually funded; unpaid tax and '
+                     'the deferred-tax reserve reduce after-tax net worth. Save '
+                     'the project or export HTML/Excel/CSV reports for review.',
                      font=SMALL_FONT, text_color=MUTED_TEXT)],
             [_primary('Save Project', key='save_project'),
              _neutral('Export to CSV', key='export_csv'),
@@ -1109,11 +1150,16 @@ class RothSimulatorGUI:
                 f"${year_result.irmaa_magi:,.0f}",
                 f"${year_result.end_balance_roth:,.0f}",
                 f"${year_result.total_tax_paid:,.0f}",
+                f"${year_result.taxes_paid:,.0f}",
+                f"${year_result.taxes_unpaid:,.0f}",
+                f"${year_result.spending_paid:,.0f}",
+                f"${year_result.reconciliation_difference:,.2f}",
             ])
 
         headings = ['Year', 'Age', 'Start Pretax', 'RMD', 'Taxable SS',
                     'Conversion', 'Conv. Tax', 'IRMAA', 'MAGI', 'IRMAA MAGI',
-                    'End Roth', 'Total Tax']
+                    'End Roth', 'Tax Liability', 'Tax Paid', 'Tax Unpaid',
+                    'Spending Paid', 'Recon Diff']
 
         layout = _title('Detail View', choice) + [
             [sg.Table(
@@ -1192,6 +1238,19 @@ OBJECTIVES:
 5. Maximize Inheritance: Convert while keeping the federal rate at 24% or less
 6. Balanced Growth: Fill the 22% bracket while avoiding IRMAA
 
+CASH FLOW AND TAX FUNDING:
+
+- Living expenses are paid from cash first, then taxable assets. If neither is
+  available, the shortfall is reported; the simulator does not invent money.
+- Taxes are funded from the source selected in Step 5: cash, Roth withholding,
+  taxable-account sales or explicit external money. External funding is capped
+  at the amount you enter.
+- Taxable sales use the cost basis you enter and realize taxable gains.
+- Tax liability is not the same as tax paid. Unpaid tax and the deferred-tax
+  reserve on remaining pre-tax balances reduce Net After All Taxes.
+- The HTML report includes the rule registry so verified law, planning
+  assumptions and unsupported areas are easy to review.
+
 REPORTS:
 
 From the results window, choose HTML Report to save a friendly, self-contained
@@ -1205,6 +1264,13 @@ PROJECTS:
 
 Save an analysis from the results window (Save Project) and reopen it
 from the main menu (Open Project) to keep your inputs between sessions.
+
+LIMITS:
+
+2026 federal and IRMAA values are verified against official sources. Later-year
+indexing is a 2.5% planning assumption. State tax is a flat approximation.
+Short-term gains, wash sales, loss carryforwards, NIIT, AMT, QCDs, the OBBBA
+senior deduction, MFS/HOH brackets and estate tax are not modeled.
 
 For more information, visit the documentation.
         """

@@ -41,9 +41,10 @@ def _comparison_rows(strategies: List[Any], comparison_df: Any):
         )
 
     columns = [
-        'Strategy', 'Objective', 'Total Conversions', 'Total Taxes Paid',
-        'Total IRMAA Costs', 'Final Roth Value', 'Final Pre-tax Value',
-        'Final Taxable Value', 'Final Net Worth', 'Net After All Taxes',
+        'Strategy', 'Objective', 'Total Conversions', 'Tax Liability',
+        'Tax Paid', 'Tax Unpaid', 'Total IRMAA Costs', 'Final Roth Value',
+        'Final Pre-tax Value', 'Final Taxable Value', 'Final Net Worth',
+        'Deferred Tax Reserve', 'Net After All Taxes',
     ]
     rows = []
     for strategy in strategies:
@@ -51,13 +52,18 @@ def _comparison_rows(strategies: List[Any], comparison_df: Any):
             strategy.scenario.name,
             strategy.scenario.target_objective,
             _money(strategy.total_conversions),
+            _money(getattr(strategy, 'total_tax_liability',
+                           strategy.total_taxes_paid)),
             _money(strategy.total_taxes_paid),
+            _money(getattr(strategy, 'total_taxes_unpaid', 0.0)),
             _money(strategy.total_irmaa_costs),
             _money(strategy.final_roth_value),
             _money(strategy.final_pretax_value),
             _money(strategy.final_taxable_value),
             _money(strategy.final_net_worth),
-            _money(strategy.final_after_tax_net_worth),
+            _money(getattr(strategy, 'final_deferred_tax_liability', 0.0)),
+            _money(getattr(strategy, 'final_after_tax_net_worth',
+                           strategy.final_net_worth)),
         ])
     return columns, rows
 
@@ -127,7 +133,10 @@ def build_excel_report(client: Any, strategies: List[Any],
         summary.cell(row=row, column=1).font = Font(bold=True)
 
     best_net = max(strategies, key=lambda s: s.final_net_worth) if strategies else None
-    thrifty = min(strategies, key=lambda s: s.total_taxes_paid) if strategies else None
+    thrifty = min(
+        strategies,
+        key=lambda s: getattr(s, 'total_tax_liability', s.total_taxes_paid),
+    ) if strategies else None
     roth_rich = max(strategies, key=lambda s: s.final_roth_value) if strategies else None
 
     summary['A7'] = 'At a glance'
@@ -140,8 +149,9 @@ def build_excel_report(client: Any, strategies: List[Any],
     highlights = [
         ('Best final net worth', best_net,
          best_net.final_net_worth if best_net else None),
-        ('Lowest lifetime tax', thrifty,
-         thrifty.total_taxes_paid if thrifty else None),
+        ('Lowest lifetime tax liability', thrifty,
+         getattr(thrifty, 'total_tax_liability', thrifty.total_taxes_paid)
+         if thrifty else None),
         ('Largest Roth cushion', roth_rich,
          roth_rich.final_roth_value if roth_rich else None),
     ]
@@ -163,7 +173,10 @@ def build_excel_report(client: Any, strategies: List[Any],
         'Conversion tax is the incremental tax caused by the conversion, not the full income tax.',
         'RMDs start at 73 and are withdrawn before any voluntary Roth conversion.',
         'IRMAA combines Part B and Part D, applies at age 65+, and uses MAGI from two years earlier.',
-        'Expenses are planning context; portfolio withdrawals for spending are not modelled.',
+        'Spending and taxes are paid from cash, taxable assets, Roth withholding or explicit external funding; unpaid amounts are reported.',
+        'Taxable-account sales use the supplied cost basis; short-term gains, wash sales, loss carryforwards and NIIT are not modelled.',
+        'After-tax net worth subtracts unpaid tax and a deferred-tax reserve on remaining pre-tax balances. The reserve rate is an assumption.',
+        'State tax is a flat approximation, not a state return. Future-year indexing is a 2.5% planning assumption.',
         'Educational estimate only—not tax or investment advice.',
     ]
     for index, note in enumerate(notes, start=14):
@@ -199,14 +212,20 @@ def build_excel_report(client: Any, strategies: List[Any],
         sheet['A5'] = 'Final net worth'
         sheet['B5'] = strategy.final_net_worth
         sheet['B5'].number_format = MONEY_FORMAT
-        sheet['A6'] = 'Lifetime tax'
-        sheet['B6'] = strategy.total_taxes_paid
+        sheet['A6'] = 'Lifetime tax liability'
+        sheet['B6'] = getattr(strategy, 'total_tax_liability',
+                              strategy.total_taxes_paid)
         sheet['B6'].number_format = MONEY_FORMAT
+        sheet['A7'] = 'Tax actually paid'
+        sheet['B7'] = strategy.total_taxes_paid
+        sheet['B7'].number_format = MONEY_FORMAT
 
         headers = [
             'Year', 'Age', 'Start Pre-tax', 'RMD', 'Taxable SS',
             'Conversion', 'Income Tax', 'Conversion Tax', 'IRMAA', 'MAGI',
-            'IRMAA MAGI', 'End Pre-tax', 'End Roth', 'End Taxable', 'Total Tax',
+            'IRMAA MAGI', 'End Pre-tax', 'End Roth', 'End Taxable',
+            'Tax Liability', 'Tax Paid', 'Tax Unpaid', 'Spending',
+            'Taxable Sales', 'Realized Gains', 'Recon Difference',
         ]
         header_row = 8
         for column, header in enumerate(headers, start=1):
@@ -223,6 +242,12 @@ def build_excel_report(client: Any, strategies: List[Any],
                 getattr(year, 'magi', 0.0), getattr(year, 'irmaa_magi', 0.0),
                 year.end_balance_pretax, year.end_balance_roth,
                 year.end_balance_taxable, year.total_tax_paid,
+                getattr(year, 'taxes_paid', 0.0),
+                getattr(year, 'taxes_unpaid', 0.0),
+                getattr(year, 'spending_paid', 0.0),
+                getattr(year, 'taxable_withdrawals', 0.0),
+                getattr(year, 'realized_gains', 0.0),
+                getattr(year, 'reconciliation_difference', 0.0),
             ]
             for column, value in enumerate(values, start=1):
                 cell = sheet.cell(row=header_row + offset, column=column,

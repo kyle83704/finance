@@ -48,6 +48,7 @@ def check_project_modules():
     modules = [
         'src.constants',
         'src.models',
+        'src.rules',
         'src.tax_calculator',
         'src.simulator',
         'src.optimizer',

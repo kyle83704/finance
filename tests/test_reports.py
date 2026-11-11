@@ -88,6 +88,15 @@ class TestHtmlReport(unittest.TestCase):
         self.assertIn('$40,000', lowest_tax_section)
         self.assertNotIn('$42,000', lowest_tax_section)
 
+    def test_rules_registry_is_in_the_audit_trail(self):
+        html = build_html_report(_client(), self.strategies,
+                                 generated_at='today')
+        self.assertIn('Rules and assumptions', html)
+        self.assertIn('Registry 2026.1', html)
+        self.assertIn('2026 federal ordinary income brackets', html)
+        self.assertIn('assumption', html)
+        self.assertIn('unsupported', html)
+
     def test_untrusted_names_are_html_escaped(self):
         strategies = [
             _strategy('<script>alert(1)</script>', 1_000_000, 1_000, 0, 1),

@@ -167,11 +167,11 @@ def main():
     print()
     
     print("=" * 120)
-    print("RANKING BY TOTAL TAXES PAID")
+    print("RANKING BY TOTAL TAX LIABILITY")
     print("=" * 120)
-    ranked = optimizer.get_ranked_strategies(strategies, "Total Taxes Paid")
+    ranked = optimizer.get_ranked_strategies(strategies, "Total Tax Liability")
     for strategy, rank in ranked:
-        print(f"{rank}. {strategy.scenario.name:40} ${strategy.total_taxes_paid:>15,.0f}")
+        print(f"{rank}. {strategy.scenario.name:40} ${strategy.total_tax_liability:>15,.0f}")
     print()
     
     # Show detail for top strategy
@@ -209,7 +209,9 @@ def main():
     print("SUMMARY")
     print("=" * 120)
     print(f"Total Conversions (30-year period): ${top_strategy.total_conversions:,.0f}")
-    print(f"Total Taxes Paid:                   ${top_strategy.total_taxes_paid:,.0f}")
+    print(f"Total Tax Liability:                ${top_strategy.total_tax_liability:,.0f}")
+    print(f"Tax Actually Paid:                  ${top_strategy.total_taxes_paid:,.0f}")
+    print(f"Tax Unpaid:                         ${top_strategy.total_taxes_unpaid:,.0f}")
     print(f"Total IRMAA Costs:                  ${top_strategy.total_irmaa_costs:,.0f}")
     print(f"Final Roth Value:                   ${top_strategy.final_roth_value:,.0f}")
     print(f"Final Pre-tax Value:                ${top_strategy.final_pretax_value:,.0f}")

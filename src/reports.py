@@ -10,11 +10,13 @@ from html import escape
 from typing import Any, List, Optional
 
 from src import theme
+from src.rules import REGISTRY_VERSION, get_rules
 
 YEAR_HEADINGS = (
     'Year', 'Age', 'Start pre-tax', 'RMD', 'Taxable SS', 'Conversion',
     'Income tax', 'Conversion tax', 'IRMAA', 'MAGI', 'IRMAA MAGI',
-    'End Roth', 'Total tax',
+    'End Roth', 'Tax liability', 'Tax paid', 'Tax unpaid', 'Spending',
+    'Taxable sales', 'Realized gains', 'Recon',
 )
 
 _CSS = """
@@ -117,7 +119,9 @@ def _filing_status_label(value: Any) -> str:
 
 def _metric_card(label: str, strategy: Any, accent: str) -> str:
     if label == 'Lowest lifetime tax':
-        value = _money(strategy.total_taxes_paid)
+        value = _money(getattr(
+            strategy, 'total_tax_liability', strategy.total_taxes_paid
+        ))
     elif label == 'Largest Roth cushion':
         value = _money(strategy.final_roth_value)
     else:
@@ -134,9 +138,10 @@ def _metric_card(label: str, strategy: Any, accent: str) -> str:
 
 def _comparison_from_strategies(strategies: List[Any]):
     columns = [
-        'Strategy', 'Objective', 'Total conversions', 'Total taxes paid',
-        'Total IRMAA costs', 'Final Roth value', 'Final pre-tax value',
-        'Final taxable value', 'Final net worth',
+        'Strategy', 'Objective', 'Total conversions', 'Tax liability',
+        'Tax paid', 'Tax unpaid', 'Total IRMAA costs', 'Final Roth value',
+        'Final pre-tax value', 'Final taxable value', 'Final net worth',
+        'Deferred tax reserve', 'Net after all taxes',
     ]
     rows = []
     for strategy in strategies:
@@ -144,12 +149,18 @@ def _comparison_from_strategies(strategies: List[Any]):
             strategy.scenario.name,
             strategy.scenario.target_objective,
             _money(strategy.total_conversions),
+            _money(getattr(strategy, 'total_tax_liability',
+                           strategy.total_taxes_paid)),
             _money(strategy.total_taxes_paid),
+            _money(getattr(strategy, 'total_taxes_unpaid', 0.0)),
             _money(strategy.total_irmaa_costs),
             _money(strategy.final_roth_value),
             _money(strategy.final_pretax_value),
             _money(strategy.final_taxable_value),
             _money(strategy.final_net_worth),
+            _money(getattr(strategy, 'final_deferred_tax_liability', 0.0)),
+            _money(getattr(strategy, 'final_after_tax_net_worth',
+                           strategy.final_net_worth)),
         ])
     return columns, rows
 
@@ -177,6 +188,38 @@ def _comparison_table(strategies: List[Any], comparison_df: Any) -> str:
             f'<tbody>{body}</tbody></table></div>')
 
 
+def _rules_table() -> str:
+    """Render the versioned rule/assumption registry for auditability."""
+    rows = []
+    for rule in get_rules():
+        source = escape(rule.source_title)
+        if rule.source_url:
+            source = (f'<a href="{escape(rule.source_url)}" rel="noreferrer">'
+                      f'{source}</a>')
+        rows.append([
+            escape(rule.name),
+            escape(f"{rule.jurisdiction} · {rule.tax_year or 'ongoing'}"),
+            escape(rule.status),
+            source,
+            escape(rule.limitations),
+        ])
+
+    body = ''.join(
+        '<tr>' + ''.join(f'<td>{cell}</td>' for cell in row) + '</tr>'
+        for row in rows
+    )
+    return (
+        f'<p class="sub">Registry {escape(REGISTRY_VERSION)}. '
+        'Verified means checked against the cited official source for the '
+        'stated year; assumption and unsupported items are not presented as '
+        'current law.</p>'
+        '<div class="table-wrap"><table><thead><tr>'
+        '<th>Rule</th><th>Scope</th><th>Status</th><th>Source</th>'
+        '<th>Limitation</th></tr></thead>'
+        f'<tbody>{body}</tbody></table></div>'
+    )
+
+
 def _year_table(strategy: Any) -> str:
     rows = []
     for year in getattr(strategy, 'years', []) or []:
@@ -194,6 +237,12 @@ def _year_table(strategy: Any) -> str:
             _money(getattr(year, 'irmaa_magi', 0)),
             _money(getattr(year, 'end_balance_roth', 0)),
             _money(getattr(year, 'total_tax_paid', 0)),
+            _money(getattr(year, 'taxes_paid', 0)),
+            _money(getattr(year, 'taxes_unpaid', 0)),
+            _money(getattr(year, 'spending_paid', 0)),
+            _money(getattr(year, 'taxable_withdrawals', 0)),
+            _money(getattr(year, 'realized_gains', 0)),
+            _money(getattr(year, 'reconciliation_difference', 0)),
         ])
 
     if not rows:
@@ -237,7 +286,7 @@ def build_html_report(client: Any, strategies: List[Any], comparison_df: Any = N
     best_net = max(strategies, key=lambda s: s.final_net_worth) if strategies else None
     thrifty = min(
         strategies,
-        key=lambda s: s.total_taxes_paid,
+        key=lambda s: getattr(s, 'total_tax_liability', s.total_taxes_paid),
     ) if strategies else None
     roth_rich = max(strategies, key=lambda s: s.final_roth_value) if strategies else None
 
@@ -261,7 +310,7 @@ def build_html_report(client: Any, strategies: List[Any], comparison_df: Any = N
             f'<p class="strategy-meta">'
             f'{escape(str(strategy.scenario.target_objective))} · {span}'
             f'Final net worth {_money(strategy.final_net_worth)} · '
-            f'Lifetime tax {_money(strategy.total_taxes_paid)}'
+            f'Lifetime tax {_money(getattr(strategy, "total_tax_liability", strategy.total_taxes_paid))}'
             f'</p>'
             f'{_year_table(strategy)}'
             f'</details>'
@@ -292,6 +341,7 @@ def build_html_report(client: Any, strategies: List[Any], comparison_df: Any = N
     detail_html = ''.join(details) or (
         '<p class="empty">No yearly detail was recorded.</p>'
     )
+    rules_html = _rules_table()
 
     return f"""<!doctype html>
 <html lang="en" style="--bg: {theme.BG}; --surface: {theme.SURFACE}; --text: {theme.TEXT}; --muted: {theme.MUTED_TEXT}; --navy: {theme.NAVY}; --teal: {theme.TEAL}; --teal-soft: {theme.TEAL_SOFT}; --coral: {theme.CORAL}; --border: {theme.BORDER}; --stripe: #FFFBF5;">
@@ -324,11 +374,15 @@ def build_html_report(client: Any, strategies: List[Any], comparison_df: Any = N
 {chart_html}
 
 <h2>Year-by-year detail</h2>
-<p class="sub">Open a strategy to see the annual conversion, tax and balance path.</p>
+<p class="sub">Open a strategy to see the annual conversion, tax and balance path. Tax liability is the amount owed; tax paid is the amount actually funded from cash, taxable assets, Roth withholding or explicit external money.</p>
 {detail_html}
 
+<h2>Rules and assumptions</h2>
+<p class="sub">What is verified law, what is a planning assumption, and what this model does not support.</p>
+{rules_html}
+
 <footer>
-<p><strong>Educational estimate, not tax advice.</strong> This report models a simplified set of federal and state rules, assumes steady growth and does not account for market volatility or future law changes. Confirm any conversion with a qualified tax professional.</p>
+<p><strong>Educational estimate, not tax advice.</strong> This report models a simplified set of federal and state rules, assumes steady growth and does not account for market volatility or future law changes. Unpaid tax and a deferred-tax reserve reduce after-tax net worth; neither is a filed return. Confirm any conversion with a qualified tax professional.</p>
 <p>Made with care by Penny · Roth Conversion Simulator</p>
 </footer>
 </main>

@@ -159,7 +159,7 @@ class TestComparisonAndRanking(unittest.TestCase):
             income_streams=[],
             expenses=Expenses(),
             total_taxes_paid=low_tax.total_taxes_paid + 1000,
-            final_net_worth=low_tax.final_net_worth,
+            final_net_worth=low_tax.final_net_worth - 30_000,
         )
 
         tax_ranking = self.optimizer.get_ranked_strategies(

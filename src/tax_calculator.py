@@ -459,6 +459,44 @@ class TaxCalculator:
             max(0.0, converted_state - baseline_state),
         )
 
+    def calculate_capital_gains_tax(
+        self,
+        realized_gains: float,
+        ordinary_income: float,
+        qualified_income: float = 0.0,
+        filing_status: str = "married_filing_jointly",
+        year: int = 2026,
+        age: Optional[int] = None,
+        spouse_age: Optional[int] = None,
+    ) -> float:
+        """Incremental federal + state tax from long-term realized gains.
+
+        All gains are treated as long-term and stacked on top of ordinary and
+        qualified income.  The caller is responsible for supplying the correct
+        ordinary-income base; this method does not model short-term gains.
+        """
+        gains = max(0.0, realized_gains)
+        if gains <= 0:
+            return 0.0
+
+        baseline = self.calculate_income_tax(
+            max(0.0, ordinary_income) + max(0.0, qualified_income),
+            filing_status,
+            year,
+            qualified_income=qualified_income,
+            age=age,
+            spouse_age=spouse_age,
+        )
+        with_gains = self.calculate_income_tax(
+            max(0.0, ordinary_income) + max(0.0, qualified_income) + gains,
+            filing_status,
+            year,
+            qualified_income=max(0.0, qualified_income) + gains,
+            age=age,
+            spouse_age=spouse_age,
+        )
+        return max(0.0, with_gains - baseline)
+
     def has_kiddie_tax(self, age: int) -> bool:
         """Check if unearned income kiddie tax rules apply (age < 24)."""
         return age < 24

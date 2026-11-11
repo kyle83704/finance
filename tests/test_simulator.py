@@ -370,11 +370,17 @@ class TestRMDHandling(unittest.TestCase):
         self.assertAlmostEqual(result.rmd_required, 530000 / 26.5, delta=1)
         self.assertEqual(result.recommended_conversion, 0.0)
         self.assertAlmostEqual(result.end_balance_pretax, 510000, delta=1)
-        self.assertAlmostEqual(result.end_balance_taxable, 20000, delta=1)
+        self.assertAlmostEqual(
+            result.end_balance_taxable, 20000 - result.taxes_paid, delta=1
+        )
         self.assertGreater(result.income_tax, 0)
         self.assertAlmostEqual(
             result.total_tax_paid,
             result.income_tax + result.conversion_tax + result.irmaa_impact,
+        )
+        self.assertAlmostEqual(
+            result.beginning_assets + sum(e.amount for e in result.ledger),
+            result.ending_assets,
         )
         self.assertIn("RMD", " ".join(result.notes))
 
@@ -387,10 +393,18 @@ class TestRMDHandling(unittest.TestCase):
         self.assertAlmostEqual(result.rmd_required, 20000, delta=1)
         self.assertAlmostEqual(result.recommended_conversion, 510000, delta=1)
         self.assertAlmostEqual(result.end_balance_pretax, 0, delta=1)
-        self.assertAlmostEqual(result.end_balance_roth, 510000, delta=1)
-        self.assertAlmostEqual(result.end_balance_taxable, 20000, delta=1)
+        self.assertAlmostEqual(
+            result.end_balance_roth,
+            510000 - result.withholding_from_conversion,
+            delta=1,
+        )
+        self.assertAlmostEqual(result.end_balance_taxable, 0, delta=1)
         self.assertGreater(result.conversion_tax, 0)
         self.assertGreater(result.total_tax_paid, result.income_tax)
+        self.assertAlmostEqual(
+            result.taxes_paid + result.taxes_unpaid, result.total_tax_paid,
+            delta=1
+        )
 
     def test_employer_401k_is_treated_as_pretax(self):
         accounts = [
@@ -508,8 +522,11 @@ class TestAfterTaxMetric(unittest.TestCase):
         self.assertGreater(strategy.total_taxes_paid, 0)
         self.assertAlmostEqual(
             strategy.final_after_tax_net_worth,
-            strategy.final_net_worth - strategy.total_taxes_paid,
+            strategy.final_net_worth
+            - strategy.total_taxes_unpaid
+            - strategy.final_deferred_tax_liability,
         )
+        self.assertGreater(strategy.final_deferred_tax_liability, 0)
 
 
 class TestSecureRmdAge(unittest.TestCase):

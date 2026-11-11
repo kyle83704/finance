@@ -91,6 +91,23 @@ class ScenarioSettings:
     avoid_irmaa: bool = True  # Try to stay below IRMAA thresholds
     fill_tax_bracket: bool = True  # Convert up to top of current bracket
     constraint_tax_rate: Optional[float] = None  # Don't let marginal rate exceed this
+    tax_payment_source: str = "cash"  # cash, withhold, taxable, external
+    external_tax_funding: float = 0.0  # Explicit external cash available for taxes
+    deferred_tax_rate: float = 0.22  # Assumption for tax on remaining pre-tax value
+
+
+@dataclass
+class LedgerEntry:
+    """A signed change in total tracked assets.
+
+    Internal transfers (RMD, Roth conversion, cash sweep) are recorded as
+    offsetting entries so the ledger explains every balance movement.  The sum
+    of all entries for a year must equal ending assets minus beginning assets.
+    """
+    category: str
+    amount: float  # positive inflow, negative outflow
+    account: str = ""
+    description: str = ""
 
 
 @dataclass
@@ -116,7 +133,23 @@ class ConversionResult:
     end_balance_pretax: float = 0.0
     end_balance_roth: float = 0.0
     end_balance_taxable: float = 0.0
-    total_tax_paid: float = 0.0
+    total_tax_paid: float = 0.0  # Total tax liability for the year
+
+    # Cash-flow and audit fields
+    beginning_assets: float = 0.0
+    ending_assets: float = 0.0
+    spending_paid: float = 0.0
+    spending_shortfall: float = 0.0
+    taxes_paid: float = 0.0  # Liability actually paid this year
+    taxes_paid_from_assets: float = 0.0
+    taxes_paid_external: float = 0.0
+    taxes_unpaid: float = 0.0
+    withholding_from_conversion: float = 0.0
+    taxable_withdrawals: float = 0.0
+    realized_gains: float = 0.0
+    external_tax_funding: float = 0.0
+    reconciliation_difference: float = 0.0
+    ledger: List[LedgerEntry] = field(default_factory=list)
     
     notes: List[str] = field(default_factory=list)
 
@@ -132,10 +165,18 @@ class ConversionStrategy:
     
     years: List[ConversionResult] = field(default_factory=list)
     total_conversions: float = 0.0
-    total_conversion_taxes: float = 0.0  # Incremental tax from conversions only
-    total_income_taxes: float = 0.0  # Income tax + conversion tax
-    total_taxes_paid: float = 0.0  # Income + conversion tax + IRMAA
+    total_conversion_taxes: float = 0.0  # Incremental tax liability from conversions
+    total_income_taxes: float = 0.0  # Income tax + conversion tax liability
+    total_taxes_paid: float = 0.0  # Tax payments actually made
+    total_tax_liability: float = 0.0  # Tax liabilities, paid or not
+    total_taxes_unpaid: float = 0.0
     total_irmaa_costs: float = 0.0
+    total_spending: float = 0.0
+    total_spending_shortfall: float = 0.0
+    total_taxable_withdrawals: float = 0.0
+    total_realized_gains: float = 0.0
+    total_external_tax_funding: float = 0.0
+    final_deferred_tax_liability: float = 0.0
     final_roth_value: float = 0.0
     final_pretax_value: float = 0.0
     final_taxable_value: float = 0.0
@@ -143,12 +184,23 @@ class ConversionStrategy:
 
     @property
     def final_after_tax_net_worth(self) -> float:
-        """Gross final net worth less the taxes and IRMAA paid along the way.
+        """Final value after unpaid tax and an explicit deferred-tax reserve.
 
-        Taxes are modelled as being paid from outside the tracked accounts, so
-        this is the comparable after-tax figure across scenarios.
+        Taxes paid during the projection already reduced account balances, so
+        only unpaid liabilities and the estimated tax on the remaining pre-tax
+        balance are subtracted here.  The deferred rate is a planning
+        assumption, not a claim about a future tax law.
         """
-        return self.final_net_worth - self.total_taxes_paid
+        return (
+            self.final_net_worth
+            - self.total_taxes_unpaid
+            - self.final_deferred_tax_liability
+        )
+
+    @property
+    def final_tax_adjusted_net_worth(self) -> float:
+        """Alias that makes the deferred-tax assumption explicit."""
+        return self.final_after_tax_net_worth
     
     @property
     def total_end_age(self) -> int:

@@ -2,37 +2,34 @@
 
 A friendly desktop planner for comparing Roth conversion strategies through
 retirement. The app walks through a five-step wizard, projects federal/state
-taxes, IRMAA and RMDs year by year, and compares six objective-driven policies
-side by side.
+taxes, IRMAA, RMDs and cash flow year by year, and compares six objective-driven
+policies side by side.
 
-Current release: **2.2.0 (Tax Pro edition)**
+Current release: **2.3.0 (Ledger edition)**
 
 ![Penny, the planning pig](docs/penny.png)
 
-## What's new
+## What's new in 2.3
 
-- **Warm Penny theme** — cream background, teal/coral/gold accents and a
-  hand-drawn piggy-bank mascot rendered with matplotlib (no image asset files).
-- **HTML report** — a self-contained, print-ready report with the comparison,
-  chart, Penny portrait and year-by-year tables. Use the browser's Print dialog
-  to save a PDF.
-- **Excel report** — a formatted `.xlsx` with a summary, comparison, one
-  year-by-year sheet per strategy and an embedded chart.
-- **Correct scenario isolation** — every strategy runs against a deep copy of
-  the accounts, so results never depend on scenario order.
-- **Correct RMD handling** — RMDs are withdrawn before voluntary conversions,
-  taxed as ordinary income and moved into the taxable bucket instead of being
-  counted as conversions.
-- **Incremental conversion tax** — conversion tax compares total tax with and
-  without the conversion; it is not the whole conversion multiplied by the top
-  marginal rate.
-- **Distinct objective policies** — the six objectives now have explicit tax
-  brackets and IRMAA behavior, and the GUI uses those policies.
-- **2026 Tax Pro engine** — actual IRS brackets and deductions, Social Security
-  provisional-income taxation, qualified-dividend rates, age-65 deductions,
-  SECURE 2.0 RMD ages, 2.5% indexing and a true two-year IRMAA replay.
-- **90 automated tests**, a strict headless layout smoke, and a rebuilt Windows
-  executable.
+- **Cash-flow ledger** — income, RMDs, conversions, spending, tax payments,
+  contributions and growth are posted as signed entries. Each year reconciles
+  beginning assets to ending assets.
+- **Explicit tax funding** — taxes can be paid from cash, Roth withholding,
+  taxable-account sales or a capped amount of external money. Liability, tax
+  actually paid and unpaid tax are separate fields.
+- **Spending that affects balances** — living expenses are paid from cash first,
+  then taxable assets. An unfunded shortfall is reported instead of being
+  ignored.
+- **Taxable cost basis and realized gains** — taxable sales realize gains and
+  the incremental gain tax is included in the year's liability.
+- **Honest after-tax math** — after-tax net worth subtracts unpaid tax and a
+  deferred-tax reserve on remaining pre-tax balances, not cumulative taxes that
+  were already paid from assets.
+- **Rule and assumption registry** — 2026 federal, LTCG, Social Security, RMD
+  and IRMAA records carry sources, dates, status and limitations. The HTML
+  report includes the registry.
+- **98 automated tests** covering cash-flow reconciliation, funding sources,
+  basis, gains, deferred tax, rules, taxes, reports and persistence.
 
 ## Features
 
@@ -43,6 +40,7 @@ Current release: **2.2.0 (Tax Pro edition)**
   403(b), Roth 401(k), HSA, taxable brokerage and pension account types.
 - Multiple income streams with start/end ages, COLA and tax treatment.
 - Live expense totals.
+- Tax-funding selection and deferred-tax assumption in the scenario step.
 - JSON project save/load.
 - CSV, HTML and Excel exports from the results window.
 
@@ -55,10 +53,10 @@ Current release: **2.2.0 (Tax Pro edition)**
 - Simplified flat state tax rates for all states plus DC.
 - RMDs at 73 for birth years 1951–1959 and 75 for 1960 or later.
 - Pro-rata treatment of non-deductible IRA basis.
-- Six 2026 IRMAA tiers covering Part B and Part D, with a true two-year MAGI
-  replay when the projection starts before Medicare.
-- Gross account values plus an after-tax net-worth comparison that subtracts
-  lifetime income tax, conversion tax and IRMAA.
+- Six 2026 IRMAA tiers covering Part B and Part D, with a two-year MAGI replay.
+- Taxable-account cost basis, realized gains and incremental gain tax.
+- Gross account values plus an after-tax measure that subtracts unpaid tax and
+  an explicit deferred-tax reserve.
 
 ### Objective policies
 
@@ -111,23 +109,43 @@ python -m PyInstaller --noconfirm --clean main.spec
 
 The packaged app is written to `dist/main.exe`.
 
+## Tax funding and cash flow
+
+The scenario step asks how taxes should be funded:
+
+1. **Cash** — cash left after spending, then Roth withholding if needed.
+2. **Withhold from conversion** — reduce the Roth conversion first, then cash.
+3. **Sell taxable assets** — sell taxable holdings, realizing gains, then cash.
+4. **External funds** — use only the explicitly entered annual amount, then
+   fall back to cash or Roth withholding.
+
+Tax liability is the amount owed for the year. Tax paid is the amount actually
+funded. Unpaid tax stays visible in the results and reduces after-tax net worth.
+External money is never assumed to be unlimited, and the simulator does not
+create a hidden bank account.
+
+Living expenses are separate from taxes. They are paid from cash, then taxable
+assets; if those are exhausted, the year records a spending shortfall. Voluntary
+pre-tax withdrawals for spending are not automatic.
+
 ## Project structure
 
 ```text
 finance/
 ├── main.py                     # Desktop entry point
 ├── src/
-│   ├── constants.py            # Tax brackets, IRMAA, RMD table, account groups
-│   ├── models.py               # Dataclasses and JSON persistence
-│   ├── tax_calculator.py       # Federal/state tax, IRMAA, RMD, pro-rata
-│   ├── simulator.py            # Year-by-year projection and conversion policy
+│   ├── constants.py            # Tax tables, IRMAA, RMD table, account groups
+│   ├── rules.py                # Versioned rule and assumption registry
+│   ├── models.py               # Dataclasses, ledger entries and JSON persistence
+│   ├── tax_calculator.py       # Federal/state tax, IRMAA, RMD, pro-rata, gains
+│   ├── simulator.py            # Year-by-year projection, funding and reconciliation
 │   ├── optimizer.py            # Objective policies and strategy comparison
 │   ├── gui.py                  # PySimpleGUI wizard, results and exports
 │   ├── theme.py                # Warm palette shared by UI, mascot and reports
 │   ├── mascot.py               # Penny rendered to PNG/data URI
-│   ├── reports.py              # Self-contained HTML report
+│   ├── reports.py              # Self-contained HTML report and rule registry
 │   └── excel_report.py         # Formatted Excel workbook with chart
-├── tests/                      # 90 automated tests
+├── tests/                      # 98 automated tests
 ├── docs/TECHNICAL.md           # Algorithms, invariants and limits
 ├── main.spec                   # PyInstaller build configuration
 ├── requirements.txt
@@ -144,7 +162,7 @@ project dependency.
 From the results window:
 
 - **HTML Report** writes one self-contained `.html` file with embedded CSS,
-  chart, mascot and tables. It opens in any browser and prints cleanly to PDF.
+  chart, mascot, tables and the rule registry. It prints cleanly to PDF.
 - **Excel Report** writes a formatted `.xlsx` with summary, comparison,
   year-by-year sheets and the chart image.
 - **Export to CSV** writes one raw year-by-year CSV per strategy.
@@ -153,27 +171,21 @@ Reports are generated locally; no data leaves the computer.
 
 ## Modeling limits
 
-This is an educational planner, not tax advice.
+This is an educational planner, not tax, legal or investment advice.
 
-- Uses 2026 law with a 2.5% planning assumption for later-year inflation;
-  actual IRS indexing will differ.
-- State tax is a simplified flat rate; state deductions, credits and retirement
-  exclusions are not modeled.
+- Uses 2026 verified federal parameters with a 2.5% planning assumption for
+  later-year inflation; actual IRS indexing will differ.
+- State tax is a simplified flat rate; state deductions, credits, retirement
+  exclusions and residency/sourcing rules are not modeled.
 - IRMAA replays the two-year MAGI when the projection includes the lookback
   years. If the projection starts at 65 or later, it falls back to current MAGI.
-- The temporary OBBBA senior deduction and Social Security payroll/benefit
-  claiming optimization are not modeled.
-- Expenses are planning context; portfolio withdrawals used for spending are
-  not deducted from account balances.
-- Taxable-account capital gains realized on sales, QCDs, AMT, NIIT, estate tax,
-  Monte Carlo volatility and state-specific retirement rules are not modeled.
-- Taxes are modeled as paid from outside the tracked accounts; the after-tax
-  metric subtracts them once.
-- A conversion with no existing Roth account creates a Roth account with a 7%
-  default growth assumption.
+- The temporary OBBBA senior deduction, MFS/HOH federal brackets, QCDs, AMT,
+  NIIT, estate tax and payroll/claiming optimization are not modeled.
+- Taxable-account sales use supplied cost basis, but short-term gains, wash
+  sales, loss carryforwards and state conformity are not modeled.
+- Spending is funded from cash and taxable assets only; an unfunded shortfall
+  is reported.
+- The deferred-tax rate is a planning assumption, not a prediction of future law.
+- No Monte Carlo, market volatility or tax-law change simulation.
 
 Always confirm conversion decisions with a qualified tax professional.
-
-## License
-
-MIT License. See the project license file when present.

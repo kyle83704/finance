@@ -13,7 +13,7 @@ from src.constants import (
 )
 from src.models import (
     ClientProfile, Account, IncomeStream, Expenses,
-    ScenarioSettings, ConversionResult, ConversionStrategy
+    ScenarioSettings, ConversionResult, ConversionStrategy, LedgerEntry
 )
 from src.tax_calculator import TaxCalculator
 
@@ -102,11 +102,18 @@ class ConversionSimulator:
         target = next((acc for acc in self._account_list(accounts)
                        if self._is_roth(acc)), None)
         if target is None:
+            pretax = [acc for acc in self._account_list(accounts)
+                      if self._is_pretax(acc)]
+            total = sum(acc.current_balance for acc in pretax)
+            source_growth = (
+                sum(acc.current_balance * acc.growth_rate for acc in pretax) / total
+                if total > 0 else 0.0
+            )
             target = self._add_account(accounts, Account(
                 name="Roth Conversion Account",
                 account_type="Roth IRA",
                 current_balance=0.0,
-                growth_rate=0.07,
+                growth_rate=source_growth,
             ))
         target.current_balance += amount
 
@@ -130,6 +137,68 @@ class ConversionSimulator:
                 growth_rate=0.04,
             ))
         target.current_balance += amount
+        target.cost_basis += amount
+
+    def _sell_taxable(self, accounts: AccountCollection, amount: float) -> Tuple[float, float]:
+        """Sell taxable assets pro rata and return (proceeds, realized gains)."""
+        remaining = max(0.0, amount)
+        proceeds = 0.0
+        gains = 0.0
+        for account in self._account_list(accounts):
+            if remaining <= 0:
+                break
+            if not self._is_taxable(account) or account.current_balance <= 0:
+                continue
+            sold = min(remaining, account.current_balance)
+            basis = min(max(0.0, account.cost_basis), account.current_balance)
+            basis_ratio = basis / account.current_balance if account.current_balance else 1.0
+            basis_removed = sold * basis_ratio
+            gains += sold - basis_removed
+            account.current_balance = max(0.0, account.current_balance - sold)
+            account.cost_basis = min(
+                max(0.0, account.cost_basis - basis_removed),
+                account.current_balance,
+            )
+            proceeds += sold
+            remaining -= sold
+        return proceeds, gains
+
+    def _withdraw_roth(self, accounts: AccountCollection, amount: float) -> float:
+        """Reduce Roth balances pro rata for explicit tax withholding."""
+        remaining = max(0.0, amount)
+        taken = 0.0
+        roth = [acc for acc in self._account_list(accounts)
+                if self._is_roth(acc) and acc.current_balance > 0]
+        total = sum(acc.current_balance for acc in roth)
+        if total <= 0:
+            return 0.0
+        for account in roth:
+            if remaining <= 0:
+                break
+            share = min(remaining, total * (account.current_balance / total))
+            share = min(share, account.current_balance)
+            account.current_balance -= share
+            taken += share
+            remaining -= share
+        return taken
+
+    def _deposit_cash(self, accounts: AccountCollection, amount: float) -> str:
+        """Sweep residual cash into the first taxable account."""
+        if amount <= 0:
+            return ""
+        target = next((acc for acc in self._account_list(accounts)
+                       if self._is_taxable(acc)), None)
+        if target is None:
+            target = self._add_account(accounts, Account(
+                name="Cash Reserve",
+                account_type="Taxable Brokerage",
+                current_balance=0.0,
+                cost_basis=0.0,
+                growth_rate=0.0,
+            ))
+        target.current_balance += amount
+        target.cost_basis += amount
+        return target.name
 
     # ------------------------------------------------------------------
     # Income
@@ -235,18 +304,21 @@ class ConversionSimulator:
         """Simulate one retirement year.
 
         Order of operations:
-        1. Calculate the RMD and withdraw it pro rata from pre-tax accounts.
-        2. Move RMD proceeds into a taxable account.
-        3. Determine the taxable Social Security portion from provisional income.
-        4. Determine and execute a Roth conversion from the remaining pre-tax
+        1. Receive income and calculate the RMD; withdraw it pro rata from
+           pre-tax accounts and hold the proceeds as cash.
+        2. Determine taxable Social Security from provisional income.
+        3. Determine and execute a Roth conversion from the remaining pre-tax
            balance.
-        5. Recompute Social Security taxability and calculate baseline income
-           tax, incremental conversion tax and IRMAA.
-        6. Apply growth to every account.
+        4. Recompute Social Security taxability and calculate baseline income
+           tax, incremental conversion tax, gain tax and IRMAA.
+        5. Pay living expenses from cash first, then taxable assets; report an
+           explicit shortfall if neither is available.
+        6. Settle tax from the selected source, record paid/unpaid amounts and
+           reconcile every asset movement in the ledger.
+        7. Apply growth to every account.
 
         ``irmaa_magi`` is the MAGI from two years earlier when the caller has it;
-        otherwise current-year MAGI is used as a documented fallback.  Expenses
-        are used for a shortfall note but are not deducted from balances.
+        otherwise current-year MAGI is used as a documented fallback.
         """
         result = ConversionResult(
             year=year,
@@ -266,8 +338,29 @@ class ConversionSimulator:
         )
 
         pretax_start = result.start_balance_pretax
+        beginning_assets = sum(
+            acc.current_balance for acc in self._account_list(accounts)
+        )
+        ledger: List[LedgerEntry] = []
+        cash = 0.0
+        taxes_paid = 0.0
+        taxes_paid_from_assets = 0.0
+        taxes_paid_external = 0.0
+        withholding_from_conversion = 0.0
+        taxable_withdrawals = 0.0
+        realized_gains = 0.0
+        external_used = 0.0
+
+        def post(category: str, amount: float, account: str = "",
+                 description: str = "") -> None:
+            if abs(amount) > 1e-9:
+                ledger.append(LedgerEntry(category, amount, account, description))
+
+        result.beginning_assets = beginning_assets
         components = self.calculate_income_components(year, income_streams)
         total_stream_income = components["total"]
+        cash += total_stream_income
+        post("income", total_stream_income, "Cash", "Income streams received")
         spouse_age = None
         if self.client.spouse_current_age is not None:
             spouse_age = self.client.spouse_current_age + (
@@ -289,10 +382,13 @@ class ConversionSimulator:
             if rmd_required > 0:
                 result.rmd_required = self._withdraw_pretax(accounts, rmd_required)
                 result.rmd_source = "All pre-tax accounts (pro rata)"
-                self._add_rmd_proceeds(accounts, result.rmd_required)
+                cash += result.rmd_required
+                post("rmd", -result.rmd_required, "Pre-tax accounts",
+                     "RMD withdrawal")
+                post("rmd", result.rmd_required, "Cash", "RMD proceeds received")
                 result.notes.append(
                     f"RMD of ${result.rmd_required:,.0f} withdrawn; "
-                    "proceeds moved to taxable bucket."
+                    "proceeds received as cash and taxed this year."
                 )
 
         # ------------------------------------------------------------------
@@ -340,6 +436,9 @@ class ConversionSimulator:
         result.recommended_conversion = conversion
         if conversion > 0:
             self._add_to_roth(accounts, conversion)
+            post("conversion", -conversion, "Pre-tax accounts",
+                 "Roth conversion")
+            post("conversion", conversion, "Roth", "Roth conversion")
             result.notes.append(
                 f"Converted ${conversion:,.0f} to Roth; "
                 f"{scenario.target_objective} policy."
@@ -443,28 +542,200 @@ class ConversionSimulator:
                     f"${irmaa_magi:,.0f}."
                 )
 
-        result.total_tax_paid = (
-            result.income_tax + result.conversion_tax + result.irmaa_impact
+        # ------------------------------------------------------------------
+        # Spending settlement
+        # ------------------------------------------------------------------
+        annual_expenses = max(0.0, getattr(expenses, "total_annual", 0.0) or 0.0)
+        spending_paid = 0.0
+        spending_shortfall = 0.0
+        if annual_expenses > 0:
+            from_cash = min(cash, annual_expenses)
+            cash -= from_cash
+            spending_paid += from_cash
+            post("spending", -from_cash, "Cash", "Living expenses")
+            remaining_spending = annual_expenses - from_cash
+
+            if remaining_spending > 0:
+                sold, gains = self._sell_taxable(accounts, remaining_spending)
+                if sold > 0:
+                    taxable_withdrawals += sold
+                    realized_gains += gains
+                    spending_paid += sold
+                    remaining_spending -= sold
+                    post("spending", -sold, "Taxable accounts",
+                         "Living expenses")
+
+            if remaining_spending > 0:
+                spending_shortfall = remaining_spending
+                result.notes.append(
+                    f"Spending shortfall of ${spending_shortfall:,.0f}; "
+                    "no cash or taxable assets were available."
+                )
+
+        result.spending_paid = spending_paid
+        result.spending_shortfall = spending_shortfall
+
+        # Gains realized to fund spending are taxable in this year.
+        gain_tax = self.tax_calc.calculate_capital_gains_tax(
+            realized_gains,
+            ordinary_after + taxable_conversion,
+            qualified_income,
+            self.client.filing_status,
+            tax_year,
+            age=age,
+            spouse_age=spouse_age,
+        )
+        tax_due = (
+            result.income_tax + result.conversion_tax
+            + result.irmaa_impact + gain_tax
         )
 
-        annual_expenses = getattr(expenses, "total_annual", 0.0) or 0.0
-        cash_available = total_stream_income + result.rmd_required
-        if annual_expenses > cash_available:
-            result.notes.append(
-                f"Cash income and RMD fall ${annual_expenses - cash_available:,.0f} "
-                "short of expenses; portfolio withdrawals are not modelled."
+        # ------------------------------------------------------------------
+        # Tax settlement
+        # ------------------------------------------------------------------
+        external_available = max(
+            0.0, float(scenario.external_tax_funding or 0.0)
+        )
+
+        def take_cash(amount: float) -> float:
+            nonlocal cash, taxes_paid, taxes_paid_from_assets
+            used = min(cash, max(0.0, amount))
+            if used > 0:
+                cash -= used
+                taxes_paid += used
+                taxes_paid_from_assets += used
+                post("tax_payment", -used, "Cash", "Tax payment from cash")
+            return used
+
+        def take_roth(amount: float) -> float:
+            nonlocal taxes_paid, taxes_paid_from_assets, withholding_from_conversion
+            used = self._withdraw_roth(accounts, amount)
+            if used > 0:
+                taxes_paid += used
+                taxes_paid_from_assets += used
+                withholding_from_conversion += used
+                post("tax_payment", -used, "Roth",
+                     "Tax withheld from conversion")
+            return used
+
+        def take_taxable(amount: float) -> float:
+            nonlocal taxes_paid, taxes_paid_from_assets
+            nonlocal taxable_withdrawals, realized_gains
+            sold, gains = self._sell_taxable(accounts, amount)
+            if sold > 0:
+                taxable_withdrawals += sold
+                realized_gains += gains
+                taxes_paid += sold
+                taxes_paid_from_assets += sold
+                post("tax_payment", -sold, "Taxable accounts",
+                     "Tax payment from taxable assets")
+            return sold
+
+        def take_external(amount: float) -> float:
+            nonlocal taxes_paid, taxes_paid_external, external_used
+            used = min(
+                max(0.0, amount),
+                max(0.0, external_available - external_used),
             )
+            if used > 0:
+                external_used += used
+                taxes_paid += used
+                taxes_paid_external += used
+                post("external_tax_funding", used, "External",
+                     "Explicit external tax funding")
+                post("tax_payment", -used, "External",
+                     "Tax payment from external funds")
+            return used
+
+        remaining_tax = max(0.0, tax_due)
+        source = (scenario.tax_payment_source or "cash").strip().lower()
+        if source == "external":
+            remaining_tax -= take_external(remaining_tax)
+            remaining_tax -= take_cash(remaining_tax)
+            remaining_tax -= take_roth(remaining_tax)
+        elif source == "withhold":
+            remaining_tax -= take_roth(remaining_tax)
+            remaining_tax -= take_cash(remaining_tax)
+            remaining_tax -= take_external(remaining_tax)
+        elif source == "taxable":
+            remaining_tax -= take_taxable(remaining_tax)
+            remaining_tax -= take_cash(remaining_tax)
+            remaining_tax -= take_roth(remaining_tax)
+            remaining_tax -= take_external(remaining_tax)
+        else:
+            remaining_tax -= take_cash(remaining_tax)
+            remaining_tax -= take_roth(remaining_tax)
+            remaining_tax -= take_external(remaining_tax)
+
+        # Taxable sales used to raise tax cash can realize additional gains.
+        # Add that second-order liability explicitly instead of dropping it.
+        if realized_gains > 0:
+            total_gain_tax = self.tax_calc.calculate_capital_gains_tax(
+                realized_gains,
+                ordinary_after + taxable_conversion,
+                qualified_income,
+                self.client.filing_status,
+                tax_year,
+                age=age,
+                spouse_age=spouse_age,
+            )
+            extra_gain_tax = max(0.0, total_gain_tax - gain_tax)
+            if extra_gain_tax > 0:
+                tax_due += extra_gain_tax
+                remaining_tax += extra_gain_tax
+                result.notes.append(
+                    f"${extra_gain_tax:,.0f} of additional tax on gains from "
+                    "tax-funding sales remains payable."
+                )
+
+        taxes_unpaid = max(0.0, remaining_tax)
+        result.total_tax_paid = tax_due
+        result.taxes_paid = taxes_paid
+        result.taxes_paid_from_assets = taxes_paid_from_assets
+        result.taxes_paid_external = taxes_paid_external
+        result.taxes_unpaid = taxes_unpaid
+        result.withholding_from_conversion = withholding_from_conversion
+        result.taxable_withdrawals = taxable_withdrawals
+        result.realized_gains = realized_gains
+        result.external_tax_funding = external_used
+
+        if taxes_unpaid > 0:
+            result.notes.append(
+                f"${taxes_unpaid:,.0f} of tax remains unpaid; no permitted "
+                "funding source covered it."
+            )
+        if withholding_from_conversion > 0:
+            result.notes.append(
+                f"${withholding_from_conversion:,.0f} of tax was withheld from "
+                "the Roth conversion; the Roth receives the net amount."
+            )
+
+        # No untracked cash is allowed to remain outside the ledger.
+        if cash > 0:
+            cash_target = self._deposit_cash(accounts, cash)
+            if cash_target:
+                post("cash_sweep", -cash, "Cash", "Residual cash sweep")
+                post("cash_sweep", cash, cash_target, "Residual cash sweep")
+            cash = 0.0
 
         # ------------------------------------------------------------------
         # Growth and ending balances
         # ------------------------------------------------------------------
         for account in self._account_list(accounts):
-            account.current_balance = self.calculate_account_growth(
-                account.current_balance,
+            before = account.current_balance
+            contribution = max(0.0, account.annual_contribution or 0.0)
+            after = self.calculate_account_growth(
+                before,
                 account.growth_rate,
                 1,
-                account.annual_contribution,
+                contribution,
             )
+            account.current_balance = after
+            if contribution:
+                post("contribution", contribution, account.name,
+                     "Annual contribution")
+            post("growth", after - before - contribution, account.name,
+                 "Investment growth")
 
         result.end_balance_pretax = sum(
             acc.current_balance for acc in self._account_list(accounts)
@@ -478,6 +749,19 @@ class ConversionSimulator:
             acc.current_balance for acc in self._account_list(accounts)
             if self._is_taxable(acc)
         )
+        result.ending_assets = sum(
+            acc.current_balance for acc in self._account_list(accounts)
+        )
+        ledger_total = sum(entry.amount for entry in ledger)
+        result.reconciliation_difference = (
+            result.ending_assets - result.beginning_assets - ledger_total
+        )
+        result.ledger = ledger
+        if abs(result.reconciliation_difference) > 1.0:
+            result.notes.append(
+                f"Ledger reconciliation difference: "
+                f"${result.reconciliation_difference:,.2f}."
+            )
 
         return result
 
@@ -695,8 +979,15 @@ class ConversionSimulator:
             strategy.total_conversions += result.recommended_conversion
             strategy.total_conversion_taxes += result.conversion_tax
             strategy.total_income_taxes += result.income_tax + result.conversion_tax
-            strategy.total_taxes_paid += result.total_tax_paid
+            strategy.total_taxes_paid += result.taxes_paid
+            strategy.total_tax_liability += result.total_tax_paid
+            strategy.total_taxes_unpaid += result.taxes_unpaid
             strategy.total_irmaa_costs += result.irmaa_impact
+            strategy.total_spending += result.spending_paid
+            strategy.total_spending_shortfall += result.spending_shortfall
+            strategy.total_taxable_withdrawals += result.taxable_withdrawals
+            strategy.total_realized_gains += result.realized_gains
+            strategy.total_external_tax_funding += result.external_tax_funding
 
         if strategy.years:
             last_year = strategy.years[-1]
@@ -707,6 +998,10 @@ class ConversionSimulator:
                 last_year.end_balance_roth
                 + last_year.end_balance_pretax
                 + last_year.end_balance_taxable
+            )
+            deferred_rate = max(0.0, min(1.0, float(scenario.deferred_tax_rate)))
+            strategy.final_deferred_tax_liability = (
+                max(0.0, last_year.end_balance_pretax) * deferred_rate
             )
 
         return strategy

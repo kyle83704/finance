@@ -1,5 +1,60 @@
 # Roth Conversion Simulator - Build Logs
 
+## Ledger 2.3 (2026-11-11) - Complete
+
+- **Status**: Complete
+- **Version**: 2.3.0 (Ledger edition)
+- **Scope**: replace note-only cash flow with a reconciled ledger, explicit tax
+  funding and taxable-account basis; separate liability from payments; add
+  versioned rule provenance and honest after-tax math.
+
+### Accounting and tax engine
+- Added `LedgerEntry` and annual beginning/ending asset reconciliation.
+- Income, RMD proceeds, conversions, spending, tax payments, contributions,
+  growth and cash sweeps are posted as signed entries.
+- Living expenses now reduce cash/taxable assets; an unfunded shortfall is
+  recorded instead of silently ignored.
+- Added tax-funding sources: cash, Roth withholding, taxable sales and capped
+  external funds.
+- Separated annual tax liability (`total_tax_paid` compatibility field) from
+  `taxes_paid`, `taxes_paid_from_assets`, `taxes_paid_external`,
+  `withholding_from_conversion` and `taxes_unpaid`.
+- Added taxable cost basis, realized gains and incremental gain tax.
+- Added `final_deferred_tax_liability`; after-tax net worth subtracts unpaid tax
+  and the deferred reserve, not cumulative taxes already paid from assets.
+- Synthetic Roth accounts now inherit the weighted pre-tax growth rate.
+- Added `src/rules.py`, a versioned registry separating verified 2026 law from
+  assumptions and unsupported areas.
+- HTML reports now include the rule registry; GUI, CSV and Excel reports expose
+  liability, paid, unpaid, spending, withdrawals, gains and reconciliation.
+
+### Verification
+- `python -m compileall -q main.py src tests` — exit 0.
+- `python -m unittest discover tests -v` — **98/98 passing**.
+- `python example_analysis.py` — exit 0; 30-year projections and CSV export
+  completed. Summary: 660,409 conversions; 635,872 tax liability; 635,872 tax
+  paid; 0 unpaid.
+- Hidden-window smoke — menu, all five wizard panels, results, strategy picker
+  and detail view constructed successfully; `LAYOUT_SMOKE_OK`.
+- `python -m PyInstaller --noconfirm --clean main.spec` — exit 0.
+- `dist/main.exe` — 79,975,385 bytes.
+- SHA-256 — `0520b7e5393420df4c25dfa89e3e914bc8ab820a012ad8a5d20e12338a29c1b1`.
+- Frozen launch — child GUI window title `Roth Conversion Simulator`.
+
+### Limitations disclosed
+- MFS/HOH brackets, OBBBA senior deduction, short-term gains, wash sales, loss
+  carryforwards, NIIT, AMT, QCDs and estate tax remain unsupported.
+- Flat state tax and 2.5% future indexing are assumptions, not verified law.
+- Pre-tax withdrawals for spending are not automatic.
+- Gain tax from tax-funding sales is computed in one additional iteration.
+
+---
+
+## Historical entries
+
+The sections below describe earlier releases. They are retained for history;
+current semantics are defined by the 2.3.0 section above.
+
 ## Tax Pro 2.2 + Clean Text UI (2026-11-11) - Complete
 
 - **Status**: Complete
@@ -179,7 +234,7 @@
   requires a paid license key at runtime)
 - **Backend**: Python with pandas, numpy, scipy
 - **Data Processing**: Custom simulator and optimizer classes
-- **Tax Engine**: State-specific tax calculations
+- **Tax Engine**: Flat state tax approximation; 2026 federal rules with source metadata
 - **Charts**: matplotlib (Agg backend, rendered into the results window)
 - **Persistence**: JSON project files via `src/models.py`
 
@@ -189,7 +244,7 @@
 - `app.py` (Flask web UI) still targets an older model API
   (`expected_growth_rate`, `source_type`, `annual_amount` on `Expenses`) and
   Flask is not in `requirements.txt`; it needs a real pass before use.
-- `dist/main.exe` is current for 2.1.0; rebuild after future UI changes.
+- `dist/main.exe` is current for 2.3.0 (79,975,385 bytes); rebuild after future source changes.
 - Limited error handling in some edge cases.
 - Performance could be improved for large datasets.
 
@@ -214,7 +269,7 @@
 
 2. **To build executable** (install PyInstaller first):
    ```bash
-   python -m PyInstaller --onefile --windowed main.py
+   python -m PyInstaller --noconfirm --clean main.spec
    ```
 
 ---
@@ -226,7 +281,7 @@
 
 1. **Optional UI**: dark-mode theme toggle; keep the current light theme as default
 2. **Short-term**: retire or finish `src/gui_v2.py`; repair `app.py`
-3. **Modeling**: add a cash-flow ledger for expenses and taxable withdrawals
+3. **Modeling**: add tax-aware pre-tax withdrawals for spending
 4. **Reporting**: native PDF output; HTML printing already works
 5. **Long-term**: Monte Carlo / sensitivity analysis
 

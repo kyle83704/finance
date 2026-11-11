@@ -103,6 +103,9 @@ class ConversionOptimizer:
                 avoid_irmaa=policy["avoid_irmaa"],
                 fill_tax_bracket=policy["fill_tax_bracket"],
                 constraint_tax_rate=policy["constraint_tax_rate"],
+                tax_payment_source=base_scenario.tax_payment_source,
+                external_tax_funding=base_scenario.external_tax_funding,
+                deferred_tax_rate=base_scenario.deferred_tax_rate,
             )
             scenarios.append(scenario)
 
@@ -120,6 +123,9 @@ class ConversionOptimizer:
                     avoid_irmaa=False,
                     fill_tax_bracket=False,
                     constraint_tax_rate=None,
+                    tax_payment_source=base_scenario.tax_payment_source,
+                    external_tax_funding=base_scenario.external_tax_funding,
+                    deferred_tax_rate=base_scenario.deferred_tax_rate,
                 )
                 scenarios.append(scenario)
 
@@ -153,11 +159,15 @@ class ConversionOptimizer:
                 "Objective": strategy.scenario.target_objective,
                 "Total Conversions": f"${strategy.total_conversions:,.0f}",
                 "Total Taxes Paid": f"${strategy.total_taxes_paid:,.0f}",
+                "Total Tax Liability": f"${strategy.total_tax_liability:,.0f}",
+                "Tax Paid": f"${strategy.total_taxes_paid:,.0f}",
+                "Tax Unpaid": f"${strategy.total_taxes_unpaid:,.0f}",
                 "Total IRMAA Costs": f"${strategy.total_irmaa_costs:,.0f}",
                 "Final Roth Value": f"${strategy.final_roth_value:,.0f}",
                 "Final Pretax Value": f"${strategy.final_pretax_value:,.0f}",
                 "Final Taxable Value": f"${strategy.final_taxable_value:,.0f}",
                 "Final Net Worth": f"${strategy.final_net_worth:,.0f}",
+                "Deferred Tax Reserve": f"${strategy.final_deferred_tax_liability:,.0f}",
                 "Net After All Taxes": f"${strategy.final_after_tax_net_worth:,.0f}",
             })
 
@@ -173,6 +183,7 @@ class ConversionOptimizer:
             "Final Net Worth": lambda s: s.final_net_worth,
             "Final Roth Value": lambda s: s.final_roth_value,
             "Total Taxes Paid": lambda s: -s.total_taxes_paid,
+            "Total Tax Liability": lambda s: -s.total_tax_liability,
             "Total IRMAA Costs": lambda s: -s.total_irmaa_costs,
             "After-Tax Net Worth": lambda s: s.final_after_tax_net_worth,
             "Final After-Tax Net Worth": lambda s: s.final_after_tax_net_worth,
@@ -212,7 +223,16 @@ class ConversionOptimizer:
                 "Conversion Tax": year_result.conversion_tax,
                 "Income Tax": year_result.income_tax,
                 "IRMAA Impact": year_result.irmaa_impact,
-                "Total Tax Paid": year_result.total_tax_paid,
+                "Tax Liability": year_result.total_tax_paid,
+                "Tax Paid": year_result.taxes_paid,
+                "Tax Unpaid": year_result.taxes_unpaid,
+                "Spending Paid": year_result.spending_paid,
+                "Spending Shortfall": year_result.spending_shortfall,
+                "Taxable Withdrawals": year_result.taxable_withdrawals,
+                "Realized Gains": year_result.realized_gains,
+                "Withholding From Conversion": year_result.withholding_from_conversion,
+                "External Tax Funding": year_result.external_tax_funding,
+                "Reconciliation Difference": year_result.reconciliation_difference,
                 "End Pretax": year_result.end_balance_pretax,
                 "End Roth": year_result.end_balance_roth,
                 "End Taxable": year_result.end_balance_taxable,
