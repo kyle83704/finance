@@ -11,24 +11,20 @@ class TestTaxCalculator(unittest.TestCase):
         self.calculator = TaxCalculator(state_residence="ID")
     
     def test_federal_tax_single_2026(self):
-        """Test federal tax for single filer."""
-        # Test bracket: $50,000 should be in 22% bracket
+        """Test federal tax for single filer using 2026 IRS brackets."""
         tax = self.calculator.calculate_federal_tax(50000, "single", 2026)
-        # First $11,600 @ 10% = $1,160
-        # Next $35,550 ($47,150 - $11,600) @ 12% = $4,266
-        # Next $2,850 ($50,000 - $47,150) @ 22% = $627
-        # Total = $1,160 + $4,266 + $627 = $6,053
-        self.assertAlmostEqual(tax, 6053, delta=10)
+        # First $12,400 @ 10% = $1,240
+        # Next $37,600 ($50,000 - $12,400) @ 12% = $4,512
+        # Total = $5,752
+        self.assertAlmostEqual(tax, 5752, delta=10)
     
     def test_federal_tax_mfj_2026(self):
         """Test federal tax for married filing jointly."""
-        # $100,000 income
         tax = self.calculator.calculate_federal_tax(100000, "married_filing_jointly", 2026)
-        # First $23,200 @ 10% = $2,320
-        # Next $71,100 ($94,300 - $23,200) @ 12% = $8,532
-        # Next $5,700 ($100,000 - $94,300) @ 22% = $1,254
-        # Total = $2,320 + $8,532 + $1,254 = $12,106
-        self.assertAlmostEqual(tax, 12106, delta=10)
+        # First $24,800 @ 10% = $2,480
+        # Next $75,200 ($100,000 - $24,800) @ 12% = $9,024
+        # Total = $11,504
+        self.assertAlmostEqual(tax, 11504, delta=10)
     
     def test_state_tax_idaho(self):
         """Test Idaho state tax (5%)."""
@@ -43,21 +39,21 @@ class TestTaxCalculator(unittest.TestCase):
         self.assertAlmostEqual(total, federal + state, delta=1)
     
     def test_standard_deduction_single(self):
-        """Test standard deduction for single filer."""
+        """Test 2026 standard deduction for a single filer."""
         ded = self.calculator.get_standard_deduction("single", 2026)
-        self.assertEqual(ded, 14600)
+        self.assertEqual(ded, 16100)
     
     def test_standard_deduction_mfj(self):
-        """Test standard deduction for married filing jointly."""
+        """Test 2026 standard deduction for married filing jointly."""
         ded = self.calculator.get_standard_deduction("married_filing_jointly", 2026)
-        self.assertEqual(ded, 29200)
+        self.assertEqual(ded, 32200)
     
     def test_marginal_rate_single(self):
         """Test marginal tax rate at various income levels."""
-        # $50,000 should be in 22% federal bracket
+        # $50,000 is still in the 12% 2026 federal bracket.
         rate = self.calculator.calculate_marginal_rate(50000, "single", 2026)
-        # 22% federal + 5% Idaho = 27%
-        self.assertAlmostEqual(rate, 0.27, places=2)
+        # 12% federal + 5% Idaho = 17%
+        self.assertAlmostEqual(rate, 0.17, places=2)
     
     def test_irmaa_single_tier1(self):
         """Test IRMAA tier 1 (no adjustment)."""
@@ -66,9 +62,9 @@ class TestTaxCalculator(unittest.TestCase):
         self.assertEqual(tier, 1)
     
     def test_irmaa_single_tier2(self):
-        """Test IRMAA tier 2."""
+        """Test IRMAA tier 2, including Part B and Part D."""
         adj, tier = self.calculator.calculate_irmaa(110000, "single")
-        self.assertEqual(adj, 70)
+        self.assertAlmostEqual(adj, 95.70)
         self.assertEqual(tier, 2)
     
     def test_irmaa_mfj_tier1(self):
@@ -79,8 +75,8 @@ class TestTaxCalculator(unittest.TestCase):
     
     def test_irmaa_mfj_tier2(self):
         """Test IRMAA tier 2 for married couple."""
-        adj, tier = self.calculator.calculate_irmaa(200000, "married_filing_jointly")
-        self.assertEqual(adj, 70)
+        adj, tier = self.calculator.calculate_irmaa(220000, "married_filing_jointly")
+        self.assertAlmostEqual(adj, 95.70)
         self.assertEqual(tier, 2)
     
     def test_rmd_age_73(self):
@@ -145,8 +141,8 @@ class TestTaxableIncomeCalculation(unittest.TestCase):
             gross_income=50000,
             filing_status="single",
         )
-        # $50,000 - $14,600 = $35,400
-        self.assertEqual(taxable, 35400)
+        # $50,000 - $16,100 = $33,900
+        self.assertEqual(taxable, 33900)
     
     def test_taxable_income_mfj_with_standard_ded(self):
         """Test taxable income calculation for MFJ."""
@@ -154,8 +150,8 @@ class TestTaxableIncomeCalculation(unittest.TestCase):
             gross_income=50000,
             filing_status="married_filing_jointly",
         )
-        # $50,000 - $29,200 = $20,800
-        self.assertEqual(taxable, 20800)
+        # $50,000 - $32,200 = $17,800
+        self.assertEqual(taxable, 17800)
     
     def test_taxable_income_below_standard_ded(self):
         """Test that taxable income doesn't go negative."""
@@ -172,8 +168,8 @@ class TestTaxableIncomeCalculation(unittest.TestCase):
             roth_conversion=50000,
             filing_status="single",
         )
-        # $40,000 + $50,000 - $14,600 = $75,400
-        self.assertEqual(taxable, 75400)
+        # $40,000 + $50,000 - $16,100 = $73,900
+        self.assertEqual(taxable, 73900)
 
 
 class TestIncrementalConversionTax(unittest.TestCase):
@@ -234,6 +230,106 @@ class TestIncrementalConversionTax(unittest.TestCase):
         self.assertGreater(
             self.calculator.calculate_income_tax(50000, "single"), 0.0
         )
+
+
+class TestProTaxRules(unittest.TestCase):
+    """Regression coverage for the professional tax rules."""
+
+    def setUp(self):
+        self.calculator = TaxCalculator(state_residence="ID")
+
+    def test_standard_deduction_includes_age_65_add_on(self):
+        self.assertEqual(
+            self.calculator.get_standard_deduction(
+                "single", 2026, age=65
+            ),
+            18150,
+        )
+        self.assertEqual(
+            self.calculator.get_standard_deduction(
+                "married_filing_jointly", 2026, age=67, spouse_age=66
+            ),
+            35500,
+        )
+        self.assertEqual(
+            self.calculator.get_standard_deduction(
+                "married_filing_jointly", 2026, age=67, spouse_age=60
+            ),
+            33850,
+        )
+
+    def test_future_year_parameters_are_indexed(self):
+        brackets = self.calculator.get_federal_brackets("single", 2027)
+        self.assertGreater(brackets[1][1], 50400)
+        self.assertGreater(
+            self.calculator.get_standard_deduction("single", 2027), 16100
+        )
+        self.assertGreater(
+            self.calculator.get_irmaa_brackets("single", 2027)[1][0],
+            109000,
+        )
+
+    def test_social_security_provisional_income_taxability(self):
+        self.assertAlmostEqual(
+            self.calculator.calculate_taxable_social_security(
+                30000, 20000, "married_filing_jointly"
+            ),
+            1500,
+            delta=1,
+        )
+        self.assertAlmostEqual(
+            self.calculator.calculate_taxable_social_security(
+                20000, 30000, "single"
+            ),
+            9600,
+            delta=1,
+        )
+        self.assertEqual(
+            self.calculator.calculate_taxable_social_security(
+                20000, 10000, "single"
+            ),
+            0,
+        )
+
+    def test_irmaa_2026_tier_boundaries(self):
+        cases = [
+            (109000, 0.0, 1),
+            (109001, 95.70, 2),
+            (137000, 95.70, 2),
+            (137001, 240.40, 3),
+            (499999, 529.60, 5),
+            (500000, 578.00, 6),
+        ]
+        for magi, expected, expected_tier in cases:
+            adjustment, tier = self.calculator.calculate_irmaa(
+                magi, "single", 2026
+            )
+            self.assertAlmostEqual(adjustment, expected, places=2)
+            self.assertEqual(tier, expected_tier)
+
+    def test_qualified_dividends_get_preferential_rates(self):
+        ordinary_only = self.calculator.calculate_income_tax(
+            50000, "single", 2026
+        )
+        with_qualified = self.calculator.calculate_income_tax(
+            50000, "single", 2026, qualified_income=10000
+        )
+        self.assertAlmostEqual(with_qualified, 4315, delta=1)
+        self.assertGreater(ordinary_only, with_qualified)
+
+    def test_secure_2_rmd_start_ages(self):
+        cases = {
+            1950: 72,
+            1951: 73,
+            1959: 73,
+            1960: 75,
+            1965: 75,
+        }
+        for birth_year, expected in cases.items():
+            self.assertEqual(
+                TaxCalculator.rmd_start_age_for_birth_year(birth_year),
+                expected,
+            )
 
 
 if __name__ == '__main__':

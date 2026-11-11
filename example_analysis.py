@@ -71,7 +71,7 @@ def main():
             annual_amount=32000,
             start_age=67,
             end_age=100,
-            tax_treatment="tax_free",
+            tax_treatment="ordinary",
         ),
         IncomeStream(
             name="Social Security (Spouse)",
@@ -79,7 +79,7 @@ def main():
             annual_amount=28000,
             start_age=67,
             end_age=100,
-            tax_treatment="tax_free",
+            tax_treatment="ordinary",
         ),
         IncomeStream(
             name="Pension",

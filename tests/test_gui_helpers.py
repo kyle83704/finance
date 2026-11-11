@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import PySimpleGUI as sg
 
+from src import theme
 from src.gui import (
     EXPENSE_KEYS,
     RothSimulatorGUI,
@@ -74,6 +75,19 @@ class TestLayoutHelpers(unittest.TestCase):
         button = _button('Go', color='#123456')
         self.assertIsInstance(button, sg.Button)
         self.assertEqual(button.ButtonColor, ('white', '#123456'))
+
+
+class TestThemeBackgrounds(unittest.TestCase):
+
+    def test_text_and_input_backgrounds_use_the_warm_palette(self):
+        # Constructor configures PySimpleGUI's global theme state.
+        RothSimulatorGUI()
+        text = sg.Text('Readable text')
+        input_element = sg.Input()
+
+        self.assertEqual(text.BackgroundColor, theme.BG)
+        self.assertEqual(input_element.BackgroundColor, theme.SURFACE)
+        self.assertEqual(text.TextColor, theme.TEXT)
 
 
 class TestComparisonChart(unittest.TestCase):

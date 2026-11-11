@@ -37,7 +37,8 @@ Click **Run Analysis**. The results window shows:
 - **Comparison** — conversions, total taxes, IRMAA, final Roth/pre-tax/taxable
   values, final net worth and net after all taxes.
 - **Chart** — final net worth by strategy, with Penny's pick in gold.
-- **Detail View** — year-by-year RMD, conversion, tax and balance columns.
+- **Detail View** — year-by-year RMD, taxable Social Security, conversion,
+  MAGI, IRMAA and balance columns.
 - **HTML Report**, **Excel Report**, **Export to CSV**, **Save Project**.
 
 ## 4. Run the tests
@@ -46,7 +47,7 @@ Click **Run Analysis**. The results window shows:
 python -m unittest discover tests -v
 ```
 
-Expected result: **80 tests, 0 failures**.
+Expected result: **90 tests, 0 failures**.
 
 The suite covers tax brackets, incremental conversion tax, RMD withdrawal,
 pro-rata basis, scenario isolation, objective policies, persistence, the HTML
@@ -118,6 +119,6 @@ virtual environment. Do not weaken assertions to make a failure disappear.
 ## Important limits
 
 The simulator is an educational estimate. It uses simplified flat state taxes,
-2026 federal parameters, current-year IRMAA MAGI, and does not deduct living
-expenses from modeled accounts. It is not a substitute for a CPA or financial
-adviser.
+2026 federal parameters indexed after 2026, a two-year IRMAA MAGI replay when
+the projection covers the lookback, and does not deduct living expenses from
+modeled accounts. It is not a substitute for a CPA or financial adviser.

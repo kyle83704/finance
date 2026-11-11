@@ -1,4 +1,4 @@
-# Build Summary — Version 2.1.0
+# Build Summary — Version 2.2.0
 
 ## Status
 
@@ -6,15 +6,15 @@
 
 | Item | Result |
 |---|---|
-| Version | 2.1.0 (Penny edition) |
+| Version | 2.2.0 (Tax Pro edition) |
 | Python | 3.13.17 |
 | UI | PySimpleGUI 4.60.5.1 |
-| Tests | **80/80 passing** |
+| Tests | **90/90 passing** |
 | Layout smoke | Menu, 5 wizard steps, results, picker, detail |
 | Example analysis | Completed successfully |
 | Packaged executable | `dist/main.exe` |
-| Executable size | 79,952,240 bytes |
-| SHA-256 | `b25da1e6421abd2a474dd5e9f93f4f322ec5261c9777c17bb9d0a93f3ac38e45` |
+| Executable size | 79,960,171 bytes |
+| SHA-256 | `88bbd42df87a969a5138a1050263aeae9c7b6611bb221a13395e17de6b3fbcb5` |
 | Frozen launch | Window title `Roth Conversion Simulator` |
 
 ## Delivered
@@ -38,7 +38,10 @@
 - Shared pre-tax/Roth/taxable account groups, including Employer 401(k).
 - Distinct policy settings for all six objectives and GUI use of the optimizer
   generator.
-- IRMAA charged from 65 and counted per eligible spouse.
+- Actual 2026 IRS brackets and standard deductions, including the 65+ add-on.
+- Social Security provisional-income taxation and qualified-dividend rates.
+- SECURE 2.0 RMD ages (73 or 75) and 2.5% indexing after 2026.
+- Six IRMAA tiers including Part B and Part D, with a true two-year MAGI replay.
 - Lifetime total tax includes income tax, conversion tax and IRMAA once.
 
 ### Reports
@@ -77,8 +80,12 @@ PySimpleGUI is pinned below 5.0 because 5.x requires a paid runtime license.
 
 ## Known limitations
 
-- 2026 federal parameters and simplified flat state taxes.
-- Current-year MAGI approximation for IRMAA.
+- 2026 federal parameters with 2.5% indexing after 2026; simplified flat state
+  taxes.
+- IRMAA uses prior MAGI when the projection covers the lookback; otherwise it
+  falls back to current MAGI.
+- Temporary OBBBA senior deduction and payroll/claiming optimization are not
+  modeled.
 - Expenses are not deducted from account balances.
 - No capital gains, NIIT, AMT, QCD, estate, Monte Carlo or spousal RMD model.
 - `src/gui_v2.py` and `app.py` are legacy prototypes, not part of the build.

@@ -171,6 +171,17 @@ class RothSimulatorGUI:
             element_background_color=PANEL_BG,
             border_width=1,
         )
+        # PySimpleGUI keeps Text/Input backgrounds in theme state separately
+        # from the Window background.  Without these overrides every Text
+        # element renders as a lavender block on top of the cream window.
+        sg.theme_background_color(PANEL_BG)
+        sg.theme_element_background_color(PANEL_BG)
+        sg.theme_text_element_background_color(PANEL_BG)
+        sg.theme_text_color(theme.TEXT)
+        sg.theme_element_text_color(theme.TEXT)
+        sg.theme_input_background_color(theme.SURFACE)
+        sg.theme_input_text_color(theme.TEXT)
+        sg.theme_button_color(('white', BRAND_GREEN))
         self.icon = 'icon.ico' if os.path.exists('icon.ico') else None
         self.client = None
         self.accounts = []
@@ -219,7 +230,7 @@ class RothSimulatorGUI:
                         tooltip='Explain Roth conversions, IRMAA and RMDs'),
              _danger('Exit', size=(14, 1), key='exit')],
             [sg.Text('')],
-            [sg.Text('Version 2.1 · Penny edition · Federal + state tax, IRMAA and RMD modelling',
+            [sg.Text('Version 2.2 · Tax Pro edition · 2026 law, Social Security, IRMAA and RMD modelling',
                      font=SMALL_FONT, text_color=FAINT_TEXT)],
         ]
 
@@ -987,9 +998,10 @@ class RothSimulatorGUI:
                 title_color=MUTED_TEXT,
                 border_width=0,
             )],
-            [sg.Text('Total Taxes Paid includes income tax, RMD tax, conversion '
-                     'tax and IRMAA. Save the project, export HTML/Excel '
-                     'reports, or send year-by-year detail to CSV.',
+            [sg.Text('Total Taxes Paid includes income tax, taxable Social '
+                     'Security, RMD tax, conversion tax and IRMAA. IRMAA uses '
+                     'the two-year MAGI lookback. Save the project, export '
+                     'HTML/Excel reports, or send year-by-year detail to CSV.',
                      font=SMALL_FONT, text_color=MUTED_TEXT)],
             [_primary('Save Project', key='save_project'),
              _neutral('Export to CSV', key='export_csv'),
@@ -1089,22 +1101,26 @@ class RothSimulatorGUI:
                 year_result.age,
                 f"${year_result.start_balance_pretax:,.0f}",
                 f"${year_result.rmd_required:,.0f}",
+                f"${year_result.taxable_social_security:,.0f}",
                 f"${year_result.recommended_conversion:,.0f}",
                 f"${year_result.conversion_tax:,.0f}",
                 f"${year_result.irmaa_impact:,.0f}",
+                f"${year_result.magi:,.0f}",
+                f"${year_result.irmaa_magi:,.0f}",
                 f"${year_result.end_balance_roth:,.0f}",
                 f"${year_result.total_tax_paid:,.0f}",
             ])
 
-        headings = ['Year', 'Age', 'Start Pretax', 'RMD', 'Conversion',
-                    'Conv. Tax', 'IRMAA', 'End Roth', 'Total Tax']
+        headings = ['Year', 'Age', 'Start Pretax', 'RMD', 'Taxable SS',
+                    'Conversion', 'Conv. Tax', 'IRMAA', 'MAGI', 'IRMAA MAGI',
+                    'End Roth', 'Total Tax']
 
         layout = _title('Detail View', choice) + [
             [sg.Table(
                 values=data,
                 headings=headings,
                 key='detail_table',
-                size=(120, 18),
+                size=(142, 18),
                 num_rows=18,
                 justification='right',
                 font=BODY_FONT,
@@ -1119,7 +1135,7 @@ class RothSimulatorGUI:
         ]
 
         window = sg.Window('Strategy Detail', layout, finalize=True,
-                           size=(1100, 560), modal=True, icon=self.icon)
+                           size=(1380, 580), modal=True, icon=self.icon)
 
         while True:
             event, _ = window.read()
@@ -1150,13 +1166,22 @@ Roth Conversion: Moving money from traditional (pre-tax) IRAs to Roth (after-tax
 - Con: Pay income tax on conversion amount
 
 IRMAA: Income-Related Monthly Adjustment Amounts
-- Medicare premiums increase at higher incomes ($194k+ for couples in 2026)
-- Conversions increase income, potentially triggering IRMAA
+- 2026 surcharges start above $109k single / $218k married filing jointly
+- Six tiers include both Part B and Part D; the top tier starts at $500k/$750k
+- The premium uses MAGI from two years earlier
+- Conversions increase MAGI, potentially triggering IRMAA two years later
 
 RMD: Required Minimum Distributions
-- Start at age 73 (2023+)
+- Start at age 73 if born 1951-1959; age 75 if born in 1960 or later
 - Must withdraw a percentage of traditional IRA/401k each year
 - Roth IRAs have no RMD during owner's lifetime
+
+SOCIAL SECURITY AND DEDUCTIONS:
+- Up to 85% of Social Security can be taxable under provisional-income rules
+- 2026 standard deduction: $16,100 single / $32,200 married filing jointly
+- Age 65+ adds $2,050 single or $1,650 per eligible married spouse
+- Qualified dividends use 0/15/20% federal rates
+- Federal brackets and thresholds are indexed at 2.5% after 2026
 
 OBJECTIVES:
 

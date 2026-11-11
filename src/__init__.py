@@ -1,6 +1,6 @@
 """Roth Conversion Simulator - Financial planning tool for retirement tax optimization."""
 
-__version__ = "2.1.0"
+__version__ = "2.2.0"
 __author__ = "Kyle Fischer"
 __description__ = "Comprehensive Roth conversion strategy optimizer"
 

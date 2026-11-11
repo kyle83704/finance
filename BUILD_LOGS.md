@@ -1,5 +1,54 @@
 # Roth Conversion Simulator - Build Logs
 
+## Tax Pro 2.2 + Clean Text UI (2026-11-11) - Complete
+
+- **Status**: Complete
+- **Version**: 2.2.0 (Tax Pro edition)
+- **Scope**: remove the lavender Text wash, replace 2024-era parameters with
+  actual 2026 law, add retiree tax rules and expose the tax audit trail.
+
+### UI cleanup
+- Root cause of the grey/lavender text blocks: PySimpleGUI kept Text and Input
+  backgrounds in theme state even though the Window was cream.  The GUI now
+  sets `theme_background_color`, `theme_text_element_background_color`,
+  `theme_element_background_color`, `theme_input_background_color` and related
+  colors explicitly.
+- Added a regression test that constructs Text/Input elements after GUI setup
+  and asserts cream/surface backgrounds.
+- Menu was visually reviewed at 970×749; text now sits directly on cream.
+- Detail view now shows Taxable SS, MAGI and IRMAA MAGI columns.
+
+### Tax logic
+- Replaced 2024-era tables with actual 2026 IRS brackets and standard
+  deductions (single $16,100; MFJ $32,200) from Rev. Proc. 2025-32.
+- Added the 65+ additional standard deduction ($2,050 single / $1,650 per
+  eligible spouse).
+- Added Social Security provisional-income taxation (up to 85% taxable), with
+  the taxable portion recomputed after a conversion.
+- Added qualified dividend/LTCG 0/15/20% federal rates.
+- Added 2.5% annual indexing for brackets, deductions, LTCG and IRMAA
+  thresholds after 2026.
+- Replaced the five old IRMAA tiers with the six official 2026 Part B + Part D
+  tiers, including exact top-tier handling ($500k single / $750k MFJ).
+- Implemented the real two-year IRMAA MAGI replay during full projections.
+- Implemented SECURE 2.0 RMD ages: 73 for birth years 1951–1959, 75 for 1960+.
+- Added taxable Social Security, MAGI and IRMAA MAGI to CSV, HTML and Excel
+  reports.
+- Updated help, README, technical docs, quick start, index and build summary.
+
+### Verification
+- `python -m unittest discover tests -v` — **90/90 passing**.
+- `python example_analysis.py` — exit 0.
+- `python -m PyInstaller --noconfirm --clean main.spec` — exit 0.
+- `dist/main.exe` — 79,960,171 bytes.
+- SHA-256 — `88bbd42df87a969a5138a1050263aeae9c7b6611bb221a13395e17de6b3fbcb5`.
+- Frozen launch — window title `Roth Conversion Simulator`.
+
+### Follow-ups
+- Temporary OBBBA senior deduction and payroll/claiming optimization.
+- State-specific progressive brackets and retirement exclusions.
+- Cash-flow ledger for expenses and taxable-account withdrawals.
+
 ## Penny UI + Correctness Overhaul (2026-11-11) - Complete
 
 - **Status**: Complete

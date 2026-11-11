@@ -5,7 +5,7 @@ retirement. The app walks through a five-step wizard, projects federal/state
 taxes, IRMAA and RMDs year by year, and compares six objective-driven policies
 side by side.
 
-Current release: **2.1.0 (Penny edition)**
+Current release: **2.2.0 (Tax Pro edition)**
 
 ![Penny, the planning pig](docs/penny.png)
 
@@ -28,7 +28,10 @@ Current release: **2.1.0 (Penny edition)**
   marginal rate.
 - **Distinct objective policies** — the six objectives now have explicit tax
   brackets and IRMAA behavior, and the GUI uses those policies.
-- **80 automated tests**, a strict headless layout smoke, and a rebuilt Windows
+- **2026 Tax Pro engine** — actual IRS brackets and deductions, Social Security
+  provisional-income taxation, qualified-dividend rates, age-65 deductions,
+  SECURE 2.0 RMD ages, 2.5% indexing and a true two-year IRMAA replay.
+- **90 automated tests**, a strict headless layout smoke, and a rebuilt Windows
   executable.
 
 ## Features
@@ -45,11 +48,15 @@ Current release: **2.1.0 (Penny edition)**
 
 ### Modeling
 
-- Progressive 2026 federal brackets and standard deductions (single and MFJ).
+- Actual 2026 federal brackets and standard deductions, including the 65+
+  add-on and 2.5% annual indexing after 2026.
+- Social Security provisional-income taxation (up to 85% of benefits taxable).
+- Qualified dividends and long-term gains at 0/15/20% federal rates.
 - Simplified flat state tax rates for all states plus DC.
-- RMDs from age 73 using the IRS Uniform Lifetime Table.
+- RMDs at 73 for birth years 1951–1959 and 75 for 1960 or later.
 - Pro-rata treatment of non-deductible IRA basis.
-- IRMAA tiers with the two-year lookback reflected in the policy cap.
+- Six 2026 IRMAA tiers covering Part B and Part D, with a true two-year MAGI
+  replay when the projection starts before Medicare.
 - Gross account values plus an after-tax net-worth comparison that subtracts
   lifetime income tax, conversion tax and IRMAA.
 
@@ -120,7 +127,7 @@ finance/
 │   ├── mascot.py               # Penny rendered to PNG/data URI
 │   ├── reports.py              # Self-contained HTML report
 │   └── excel_report.py         # Formatted Excel workbook with chart
-├── tests/                      # 80 automated tests
+├── tests/                      # 90 automated tests
 ├── docs/TECHNICAL.md           # Algorithms, invariants and limits
 ├── main.spec                   # PyInstaller build configuration
 ├── requirements.txt
@@ -148,15 +155,18 @@ Reports are generated locally; no data leaves the computer.
 
 This is an educational planner, not tax advice.
 
-- Uses 2026 federal brackets and standard deductions throughout the projection.
+- Uses 2026 law with a 2.5% planning assumption for later-year inflation;
+  actual IRS indexing will differ.
 - State tax is a simplified flat rate; state deductions, credits and retirement
   exclusions are not modeled.
-- IRMAA uses current-year MAGI in the simulation rather than replaying the
-  actual two-year lookback for each premium year.
+- IRMAA replays the two-year MAGI when the projection includes the lookback
+  years. If the projection starts at 65 or later, it falls back to current MAGI.
+- The temporary OBBBA senior deduction and Social Security payroll/benefit
+  claiming optimization are not modeled.
 - Expenses are planning context; portfolio withdrawals used for spending are
   not deducted from account balances.
-- Taxable-account capital gains, QCDs, AMT, NIIT, estate tax, Monte Carlo
-  volatility and state-specific retirement rules are not modeled.
+- Taxable-account capital gains realized on sales, QCDs, AMT, NIIT, estate tax,
+  Monte Carlo volatility and state-specific retirement rules are not modeled.
 - Taxes are modeled as paid from outside the tracked accounts; the after-tax
   metric subtracts them once.
 - A conversion with no existing Roth account creates a Roth account with a 7%

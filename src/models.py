@@ -31,7 +31,7 @@ class IncomeStream:
     start_age: int = 0  # Age when income starts
     end_age: int = 100  # Age when income stops
     growth_rate: float = 0.03  # Annual growth %
-    tax_treatment: str = "ordinary"  # "ordinary", "qualified_dividends", "tax_free" (SS, HSA)
+    tax_treatment: str = "ordinary"  # "ordinary", "qualified_dividends", "tax_free" (HSA/Roth-like)
     ss_claim_age: Optional[int] = None  # For Social Security only
 
 
@@ -108,6 +108,9 @@ class ConversionResult:
     recommended_conversion: float = 0.0
     conversion_tax: float = 0.0  # Incremental tax caused by the conversion
     income_tax: float = 0.0  # Tax on income streams + RMD, before conversion
+    taxable_social_security: float = 0.0  # Portion of SS included in income
+    magi: float = 0.0  # AGI proxy used for the IRMAA lookback
+    irmaa_magi: float = 0.0  # Prior-year MAGI used for this year's premium
     irmaa_impact: float = 0.0  # Additional Medicare costs for the year
     
     end_balance_pretax: float = 0.0

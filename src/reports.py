@@ -12,8 +12,9 @@ from typing import Any, List, Optional
 from src import theme
 
 YEAR_HEADINGS = (
-    'Year', 'Age', 'Start pre-tax', 'RMD', 'Conversion',
-    'Income tax', 'Conversion tax', 'IRMAA', 'End Roth', 'Total tax',
+    'Year', 'Age', 'Start pre-tax', 'RMD', 'Taxable SS', 'Conversion',
+    'Income tax', 'Conversion tax', 'IRMAA', 'MAGI', 'IRMAA MAGI',
+    'End Roth', 'Total tax',
 )
 
 _CSS = """
@@ -184,10 +185,13 @@ def _year_table(strategy: Any) -> str:
             escape(str(getattr(year, 'age', ''))),
             _money(getattr(year, 'start_balance_pretax', 0)),
             _money(getattr(year, 'rmd_required', 0)),
+            _money(getattr(year, 'taxable_social_security', 0)),
             _money(getattr(year, 'recommended_conversion', 0)),
             _money(getattr(year, 'income_tax', 0)),
             _money(getattr(year, 'conversion_tax', 0)),
             _money(getattr(year, 'irmaa_impact', 0)),
+            _money(getattr(year, 'magi', 0)),
+            _money(getattr(year, 'irmaa_magi', 0)),
             _money(getattr(year, 'end_balance_roth', 0)),
             _money(getattr(year, 'total_tax_paid', 0)),
         ])

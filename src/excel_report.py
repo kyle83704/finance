@@ -159,10 +159,10 @@ def build_excel_report(client: Any, strategies: List[Any],
     summary['A13'] = 'Method notes'
     summary['A13'].font = Font(size=12, bold=True, color=theme.NAVY.lstrip('#'))
     notes = [
-        'Taxes combine progressive 2026 federal brackets with a simplified flat state rate.',
+        'Taxes use 2026 federal brackets indexed after 2026, Social Security provisional-income rules, qualified-dividend rates and a simplified flat state rate.',
         'Conversion tax is the incremental tax caused by the conversion, not the full income tax.',
         'RMDs start at 73 and are withdrawn before any voluntary Roth conversion.',
-        'IRMAA is an annual Medicare surcharge and applies at age 65+.',
+        'IRMAA combines Part B and Part D, applies at age 65+, and uses MAGI from two years earlier.',
         'Expenses are planning context; portfolio withdrawals for spending are not modelled.',
         'Educational estimate only—not tax or investment advice.',
     ]
@@ -204,9 +204,9 @@ def build_excel_report(client: Any, strategies: List[Any],
         sheet['B6'].number_format = MONEY_FORMAT
 
         headers = [
-            'Year', 'Age', 'Start Pre-tax', 'RMD', 'Conversion',
-            'Income Tax', 'Conversion Tax', 'IRMAA', 'End Pre-tax',
-            'End Roth', 'End Taxable', 'Total Tax',
+            'Year', 'Age', 'Start Pre-tax', 'RMD', 'Taxable SS',
+            'Conversion', 'Income Tax', 'Conversion Tax', 'IRMAA', 'MAGI',
+            'IRMAA MAGI', 'End Pre-tax', 'End Roth', 'End Taxable', 'Total Tax',
         ]
         header_row = 8
         for column, header in enumerate(headers, start=1):
@@ -216,8 +216,11 @@ def build_excel_report(client: Any, strategies: List[Any],
         for offset, year in enumerate(getattr(strategy, 'years', []) or [], start=1):
             values = [
                 year.year, year.age, year.start_balance_pretax,
-                year.rmd_required, year.recommended_conversion,
+                year.rmd_required,
+                getattr(year, 'taxable_social_security', 0.0),
+                year.recommended_conversion,
                 year.income_tax, year.conversion_tax, year.irmaa_impact,
+                getattr(year, 'magi', 0.0), getattr(year, 'irmaa_magi', 0.0),
                 year.end_balance_pretax, year.end_balance_roth,
                 year.end_balance_taxable, year.total_tax_paid,
             ]

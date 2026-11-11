@@ -21,10 +21,13 @@ ConversionSimulator (src/simulator.py)
   - projects account growth
         │
 TaxCalculator (src/tax_calculator.py)
-  - progressive federal tax
+  - 2026 federal brackets + age-65 standard-deduction add-on
+  - Social Security provisional-income taxability
+  - qualified dividend/LTCG 0/15/20% rates
   - simplified flat state tax
-  - IRMAA tiers
-  - RMD divisors
+  - indexed future-year thresholds
+  - six IRMAA tiers (Part B + D)
+  - SECURE 2.0 RMD ages and IRS divisors
   - pro-rata conversion tax
         │
 models.py / constants.py
@@ -54,7 +57,8 @@ scenario, so scenario order does not change results.
 
 ### 2. RMDs are not conversions
 
-At age 73+ the simulator calculates each pre-tax account's RMD using the IRS
+At the client's SECURE 2.0 RMD age (73 for birth years 1951–1959, 75 for
+1960+) the simulator calculates each pre-tax account's RMD using the IRS
 Uniform Lifetime divisor, withdraws the total pro rata, and records it as
 `rmd_required`. That amount is **not** added to `recommended_conversion`.
 RMD proceeds move into the taxable bucket to preserve gross net worth. The RMD
@@ -128,8 +132,13 @@ simulator only recognized “401(k)”.
 The IRMAA policy cap begins at age 63 because the premium uses MAGI from two
 years earlier. The annual surcharge is charged at age 65+. For MFJ, the
 surcharge is doubled only when the spouse is also 65+ (or no spouse age is
-provided). Current-year MAGI is used in the projection; the full two-year
-premium replay is not modeled.
+provided). `run_full_simulation()` keeps a MAGI history and passes the value
+from year−2 into each premium year. If the projection begins at 65 or later,
+that history does not exist and current-year MAGI is the documented fallback.
+
+The 2026 table combines Part B and Part D per person, with six tiers. The top
+tier starts at $500k single/$750k MFJ; a MAGI exactly at that threshold is in
+the top tier.
 
 ## Objective policies
 
@@ -151,9 +160,17 @@ pre-tax balance.
 
 ### Federal
 
-Progressive 2026 brackets for `single` and `married_filing_jointly`. Taxable
-income is gross ordinary income minus the standard deduction. RMDs and
-conversions are ordinary income.
+Actual 2026 brackets from IRS Rev. Proc. 2025-32 for `single` and
+`married_filing_jointly`. Taxable income is gross income minus the standard
+deduction. The standard deduction is $16,100 single/$32,200 MFJ, plus $2,050
+single or $1,650 per eligible spouse at 65+. Brackets, deductions, LTCG
+thresholds and IRMAA thresholds are indexed at 2.5% after 2026 as a planning
+assumption.
+
+Social Security uses the provisional-income formula and the statutory
+$25k/$34k (single/HOH) or $32k/$44k (MFJ) thresholds, which are not indexed.
+Up to 85% of benefits can be taxable. Qualified dividends/LTCG use the 2026
+0/15/20% breakpoints. RMDs and conversions are ordinary income.
 
 ### State
 
@@ -173,7 +190,8 @@ tax.
 RMD = account balance / IRS Uniform Lifetime divisor(age)
 ```
 
-Starting age is 73. Roth accounts are excluded.
+Starting age is 73 for birth years 1951–1959 and 75 for 1960 or later. Roth
+accounts are excluded.
 
 ## Growth and cash flow
 
@@ -214,12 +232,15 @@ missing, corrupt or invalid files.
 
 ## Tests
 
-`python -m unittest discover tests -v` runs **80 tests** covering:
+`python -m unittest discover tests -v` runs **90 tests** covering:
 
-- federal/state tax, deductions, IRMAA, RMDs, pro-rata
+- 2026 federal/state tax, age-65 deductions, IRMAA boundaries, RMDs, pro-rata
+- Social Security provisional-income taxability
+- qualified-dividend rates and future-year indexing
 - incremental conversion tax
 - scenario isolation and order independence
-- RMD withdrawal, conversion capacity and Employer 401(k) handling
+- SECURE 2.0 RMD ages, conversion capacity and Employer 401(k) handling
+- two-year IRMAA lookback replay
 - objective policy uniqueness
 - ranking and after-tax comparison
 - project persistence
@@ -242,10 +263,13 @@ Additional verification:
 
 ## Known limitations
 
-- 2026 federal parameters only; no inflation indexing.
+- 2026 federal parameters indexed at a 2.5% planning assumption; actual IRS
+  inflation adjustments will differ.
 - Flat state tax approximation.
-- IRMAA projection uses current-year MAGI.
-- No capital-gains, NIIT, AMT, QCD or estate modeling.
+- IRMAA uses current-year MAGI only when the two-year lookback history is not
+  available.
+- Temporary OBBBA senior deduction, payroll/claiming optimization, realized
+  taxable-account capital gains, NIIT, AMT, QCD and estate modeling are absent.
 - No Monte Carlo or market volatility.
 - No spousal RMD/IRMAA synchronization beyond the 65+ count.
 - Expenses are not deducted from portfolios.

@@ -118,12 +118,10 @@ class TestConversionSimulator(unittest.TestCase):
             ),
             tax_year=2026,
         )
-        # Single filer, standard deduction $14,600
-        # Current taxable = $40,000 - $14,600 = $25,400
-        # First bracket limit is $11,600
-        # So they're already in second bracket ($25,400 > $11,600)
-        # Next limit is $47,150, so room = $47,150 - $25,400 = $21,750
-        self.assertAlmostEqual(amount, 21750, delta=10)
+        # Single filer, 2026 standard deduction $16,100
+        # Current taxable = $40,000 - $16,100 = $23,900
+        # The 12% bracket tops out at $50,400, so room = $26,500
+        self.assertAlmostEqual(amount, 26500, delta=10)
     
     def test_calculate_max_before_irmaa_single(self):
         """Test maximum income before IRMAA triggers."""
@@ -131,14 +129,14 @@ class TestConversionSimulator(unittest.TestCase):
             current_income=50000,
             filing_status="single",
         )
-        # First IRMAA threshold for single = $97,000
-        # Room = $97,000 - $50,000 = $47,000
-        self.assertEqual(max_amount, 47000)
+        # First 2026 IRMAA threshold for single = $109,000
+        # Room = $109,000 - $50,000 = $59,000
+        self.assertEqual(max_amount, 59000)
     
     def test_calculate_max_before_irmaa_at_threshold(self):
         """Test maximum when at IRMAA threshold."""
         max_amount = self.simulator._calculate_max_before_irmaa(
-            current_income=97000,
+            current_income=109000,
             filing_status="single",
         )
         self.assertEqual(max_amount, 0)
@@ -146,7 +144,7 @@ class TestConversionSimulator(unittest.TestCase):
     def test_calculate_max_before_irmaa_above_threshold(self):
         """Test maximum when already above threshold."""
         max_amount = self.simulator._calculate_max_before_irmaa(
-            current_income=100000,
+            current_income=110000,
             filing_status="single",
         )
         self.assertEqual(max_amount, 0)
@@ -512,6 +510,177 @@ class TestAfterTaxMetric(unittest.TestCase):
             strategy.final_after_tax_net_worth,
             strategy.final_net_worth - strategy.total_taxes_paid,
         )
+
+
+class TestSecureRmdAge(unittest.TestCase):
+
+    def test_1960_birth_year_waits_until_age_75(self):
+        current_year = datetime.now().year
+        client = ClientProfile(
+            first_name="Eleanor",
+            last_name="Roosevelt",
+            birth_year=1960,
+            state_residence="ID",
+            filing_status="single",
+        )
+        simulator = ConversionSimulator(client)
+        self.assertEqual(simulator.rmd_start_age, 75)
+
+        accounts = [
+            Account(
+                name="Traditional IRA",
+                account_type="Traditional IRA",
+                current_balance=530000,
+                pretax_basis=530000,
+                growth_rate=0.0,
+            ),
+            Account(
+                name="Roth IRA",
+                account_type="Roth IRA",
+                current_balance=0.0,
+                growth_rate=0.0,
+            ),
+            Account(
+                name="Taxable Brokerage",
+                account_type="Taxable Brokerage",
+                current_balance=0.0,
+                growth_rate=0.0,
+            ),
+        ]
+        scenario = ScenarioSettings(
+            name="SECURE 2.0",
+            start_year=current_year + 7,
+            end_year=current_year + 9,
+            annual_conversion_target=0,
+            fill_tax_bracket=False,
+            avoid_irmaa=False,
+        )
+        strategy = simulator.run_full_simulation(
+            scenario, accounts, [], Expenses()
+        )
+
+        # Projection starts at age 73, but this birth year's RMD age is 75.
+        self.assertEqual(strategy.years[0].age, 73)
+        self.assertEqual(strategy.years[0].rmd_required, 0.0)
+        self.assertGreater(strategy.years[-1].rmd_required, 0.0)
+
+
+class TestSocialSecurityTaxation(unittest.TestCase):
+
+    def test_social_security_is_taxed_by_provisional_income(self):
+        current_year = datetime.now().year
+        client = ClientProfile(
+            first_name="Frances",
+            last_name="Perkins",
+            birth_year=current_year - 67,
+            state_residence="ID",
+            filing_status="single",
+        )
+        simulator = ConversionSimulator(client)
+        income = [
+            IncomeStream(
+                name="Social Security",
+                income_type="Social Security",
+                annual_amount=30000,
+                start_age=67,
+                end_age=100,
+                growth_rate=0.0,
+                tax_treatment="tax_free",
+            ),
+            IncomeStream(
+                name="Pension",
+                income_type="Pension",
+                annual_amount=20000,
+                start_age=67,
+                end_age=100,
+                growth_rate=0.0,
+            ),
+        ]
+        components = simulator.calculate_income_components(current_year, income)
+        self.assertAlmostEqual(components["social_security"], 30000)
+        self.assertAlmostEqual(components["ordinary"], 20000)
+
+        scenario = ScenarioSettings(
+            name="SS test",
+            start_year=current_year,
+            end_year=current_year,
+            annual_conversion_target=0,
+            fill_tax_bracket=False,
+            avoid_irmaa=False,
+        )
+        strategy = simulator.run_full_simulation(
+            scenario,
+            [
+                Account("IRA", "Traditional IRA", 100000, growth_rate=0.0),
+                Account("Roth", "Roth IRA", 0.0, growth_rate=0.0),
+                Account("Taxable", "Taxable Brokerage", 0.0, growth_rate=0.0),
+            ],
+            income,
+            Expenses(),
+        )
+        result = strategy.years[0]
+
+        # $20k other income + $15k half of SS = $35k provisional income.
+        # The statutory single thresholds are $25k and $34k.
+        self.assertAlmostEqual(result.taxable_social_security, 5350, delta=1)
+        self.assertGreater(result.income_tax, 0)
+        self.assertTrue(any("Social Security" in note for note in result.notes))
+
+
+class TestIrmaaLookback(unittest.TestCase):
+
+    def test_age_65_premium_uses_magi_from_two_years_earlier(self):
+        current_year = datetime.now().year
+        client = ClientProfile(
+            first_name="Ida",
+            last_name="Tarbell",
+            birth_year=current_year - 63,
+            state_residence="ID",
+            filing_status="single",
+        )
+        simulator = ConversionSimulator(client)
+        accounts = [
+            Account(
+                name="Traditional IRA",
+                account_type="Traditional IRA",
+                current_balance=150000,
+                pretax_basis=150000,
+                growth_rate=0.0,
+            ),
+            Account(
+                name="Roth IRA",
+                account_type="Roth IRA",
+                current_balance=0.0,
+                growth_rate=0.0,
+            ),
+            Account(
+                name="Taxable Brokerage",
+                account_type="Taxable Brokerage",
+                current_balance=0.0,
+                growth_rate=0.0,
+            ),
+        ]
+        scenario = ScenarioSettings(
+            name="IRMAA lookback",
+            start_year=current_year,
+            end_year=current_year + 2,
+            annual_conversion_target=150000,
+            max_conversion_allowed=150000,
+            fill_tax_bracket=False,
+            avoid_irmaa=False,
+        )
+        strategy = simulator.run_full_simulation(
+            scenario, accounts, [], Expenses()
+        )
+
+        self.assertEqual(strategy.years[0].age, 63)
+        self.assertEqual(strategy.years[2].age, 65)
+        self.assertAlmostEqual(
+            strategy.years[2].irmaa_magi,
+            strategy.years[0].magi,
+            delta=1,
+        )
+        self.assertGreater(strategy.years[2].irmaa_impact, 0)
 
 
 if __name__ == '__main__':

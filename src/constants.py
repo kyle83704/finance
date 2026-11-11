@@ -1,33 +1,72 @@
 """Constants for Roth conversion simulator."""
 
-# Federal tax brackets for 2026 (example - will be parameterized)
+# Federal tax brackets for 2026 (IRS Rev. Proc. 2025-32)
 FEDERAL_TAX_BRACKETS_2026 = {
     "single": [
-        (0, 11600, 0.10),
-        (11600, 47150, 0.12),
-        (47150, 100525, 0.22),
-        (100525, 191950, 0.24),
-        (191950, 243725, 0.32),
-        (243725, 609350, 0.35),
-        (609350, float('inf'), 0.37),
+        (0, 12400, 0.10),
+        (12400, 50400, 0.12),
+        (50400, 105700, 0.22),
+        (105700, 201775, 0.24),
+        (201775, 256225, 0.32),
+        (256225, 640600, 0.35),
+        (640600, float('inf'), 0.37),
     ],
     "married_filing_jointly": [
-        (0, 23200, 0.10),
-        (23200, 94300, 0.12),
-        (94300, 201050, 0.22),
-        (201050, 383900, 0.24),
-        (383900, 487450, 0.32),
-        (487450, 731200, 0.35),
-        (731200, float('inf'), 0.37),
+        (0, 24800, 0.10),
+        (24800, 100800, 0.12),
+        (100800, 211400, 0.22),
+        (211400, 403550, 0.24),
+        (403550, 512450, 0.32),
+        (512450, 768700, 0.35),
+        (768700, float('inf'), 0.37),
     ],
 }
 
-# 2026 Standard deductions
+# 2026 standard deductions
 STANDARD_DEDUCTION_2026 = {
-    "single": 14600,
-    "married_filing_jointly": 29200,
-    "married_filing_separately": 14600,
-    "head_of_household": 21900,
+    "single": 16100,
+    "married_filing_jointly": 32200,
+    "married_filing_separately": 16100,
+    "head_of_household": 24150,
+}
+
+# Additional standard deduction for taxpayers 65 or older (2026).  For MFJ
+# this is per qualifying spouse, so a couple where both are 65+ gets twice the
+# married amount.
+ADDITIONAL_STANDARD_DEDUCTION_2026 = {
+    "single": 2050,
+    "married_filing_jointly": 1650,
+    "married_filing_separately": 1650,
+    "head_of_household": 2050,
+}
+
+# Planning assumption used to index brackets, deductions, LTCG thresholds and
+# IRMAA thresholds after 2026.  The IRS does not publish future-year tables.
+TAX_BRACKET_INFLATION_RATE = 0.025
+
+# 2026 maximum 0% and 15% rates for long-term capital gains and qualified
+# dividends (IRS Rev. Proc. 2025-32, section 4.03).
+LTCG_BRACKETS_2026 = {
+    "single": [
+        (0, 49450, 0.00),
+        (49450, 545500, 0.15),
+        (545500, float('inf'), 0.20),
+    ],
+    "married_filing_jointly": [
+        (0, 98900, 0.00),
+        (98900, 613700, 0.15),
+        (613700, float('inf'), 0.20),
+    ],
+    "married_filing_separately": [
+        (0, 49450, 0.00),
+        (49450, 306850, 0.15),
+        (306850, float('inf'), 0.20),
+    ],
+    "head_of_household": [
+        (0, 66200, 0.00),
+        (66200, 579600, 0.15),
+        (579600, float('inf'), 0.20),
+    ],
 }
 
 # State income tax rates (simplified - single rate, not progressive)
@@ -47,22 +86,26 @@ STATE_TAX_RATES = {
     "WI": 0.0685, "WY": 0.00, "DC": 0.08,
 }
 
-# IRMAA brackets for 2026 (Medicare Part B/D premiums)
-# Format: (income_threshold, monthly_adjustment)
+# 2026 IRMAA brackets, combining Part B and Part D surcharges per person.
+# Format: (income_threshold, monthly_adjustment).  The threshold is the top of
+# the no-surcharge tier; higher tiers run through the next threshold.  At the
+# top tier the threshold is inclusive, matching CMS ($500k single/$750k MFJ).
 IRMAA_BRACKETS_2026 = {
     "single": [
-        (0, 0),           # Tier 1: MAGI $0-$97k
-        (97000, 70),      # Tier 2: MAGI $97k-$123k
-        (123000, 175),    # Tier 3: MAGI $123k-$153k
-        (153000, 280),    # Tier 4: MAGI $153k-$183k
-        (183000, 385),    # Tier 5: MAGI $183k+
+        (0, 0.00),          # up to $109k
+        (109000, 95.70),    # Part B $81.20 + Part D $14.50
+        (137000, 240.40),   # Part B $202.90 + Part D $37.50
+        (171000, 385.00),   # Part B $324.60 + Part D $60.40
+        (205000, 529.60),   # Part B $446.30 + Part D $83.30
+        (500000, 578.00),   # Part B $487.00 + Part D $91.00
     ],
     "married_filing_jointly": [
-        (0, 0),           # Tier 1: MAGI $0-$194k
-        (194000, 70),     # Tier 2: MAGI $194k-$246k
-        (246000, 175),    # Tier 3: MAGI $246k-$306k
-        (306000, 280),    # Tier 4: MAGI $306k-$366k
-        (366000, 385),    # Tier 5: MAGI $366k+
+        (0, 0.00),          # up to $218k
+        (218000, 95.70),
+        (274000, 240.40),
+        (342000, 385.00),
+        (410000, 529.60),
+        (750000, 578.00),
     ],
 }
 
@@ -75,8 +118,9 @@ RMD_AGE_MULTIPLIERS = {
     96: 7.6, 97: 7.1, 98: 6.5, 99: 6.0, 100: 5.5,
 }
 
-# RMD age threshold
-RMD_START_AGE = 73  # As of 2023 (was 72 before)
+# RMD age thresholds (SECURE 2.0)
+RMD_START_AGE = 73  # Born 1951-1959; also the legacy default
+RMD_START_AGE_1960_PLUS = 75  # Born 1960 or later
 
 # Roth conversion rules
 ROTH_CONVERSION_RULES = {

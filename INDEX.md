@@ -1,6 +1,6 @@
 # Roth Conversion Simulator — Documentation Index
 
-Version **2.1.0 (Penny edition)** · 80 automated tests passing
+Version **2.2.0 (Tax Pro edition)** · 90 automated tests passing
 
 ## Start here
 
@@ -45,7 +45,11 @@ python -m PyInstaller --noconfirm --clean main.spec
 - RMDs are mandatory withdrawals, not conversions.
 - Conversion tax is incremental, not top-marginal-rate × conversion.
 - Pro-rata basis is captured before the conversion withdrawal.
-- IRMAA starts at 65; the policy cap starts at 63 for the lookback.
+- Social Security is taxed under provisional-income rules; qualified
+  dividends use 0/15/20% federal rates.
+- RMD age is 73 for birth years 1951–1959 and 75 for 1960+.
+- IRMAA starts at 65, uses MAGI from two years earlier, and combines Part B and
+  Part D; the policy cap starts at 63 for the lookback.
 - `Employer 401(k)` and `401(k)` are both treated as pre-tax.
 - Total lifetime tax includes income tax, conversion tax and IRMAA exactly once.
 
@@ -63,14 +67,16 @@ src/theme.py             Shared warm palette
 src/mascot.py            Penny renderer
 src/reports.py           HTML report
 src/excel_report.py      Excel workbook report
-tests/                   80 automated tests
+tests/                   90 automated tests
 docs/TECHNICAL.md        Detailed technical reference
 ```
 
 ## Important limits
 
-- 2026 federal tax parameters; simplified flat state tax.
-- Current-year MAGI approximation for IRMAA.
+- 2026 federal tax parameters with 2.5% indexing after 2026; simplified flat
+  state tax.
+- IRMAA replays prior MAGI when the lookback years are in the projection;
+  otherwise current MAGI is the documented fallback.
 - Expenses are not deducted from modeled portfolios.
 - No market volatility, capital gains, QCD, AMT, NIIT or estate modeling.
 - Educational estimate only; confirm decisions with a qualified professional.
