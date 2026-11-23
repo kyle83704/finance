@@ -14,15 +14,12 @@ the external-funding cap and ledger reconciliation.
 ## Repository state
 
 - Branch: `main`
-- Code baseline commit: `8f9e32b` — `Add reconciled cash-flow ledger and explicit tax funding`
-- Working tree is intentionally uncommitted:
-  - modified: `BUILD_LOGS.md`, `BUILD_SUMMARY.md`, `docs/penny.png`,
-    `src/gui.py`, `src/mascot.py`, `src/simulator.py`,
-    `tests/test_gui_helpers.py`, `tests/test_phase_b.py`
-  - untracked: `AGENTS.md`, `docs/CURRENT_STATE.md`, `docs/DECISIONS.md`,
-    `docs/BUILD_HISTORY.md`, `src/projection_map.py`,
-    `tests/test_projection_map.py`
-- No commit or push was performed for the UI/map/mascot work.
+- Feature commit: `051bcb8` — `Add projection map and settle taxable funding gains`.
+- History integration commit: `a036993` — `Merge GitHub main history`; this
+  preserves the older unrelated GitHub initial commit without replacing the
+  verified local tree or force-pushing.
+- Push target: `origin/main` at `https://github.com/kyle83704/finance.git`.
+- Working tree was clean before this checkpoint update.
 - Current release: `2.3.0` (`src/__init__.py`, GUI footer and docs agree).
 
 ## Verified implementation state
@@ -131,12 +128,10 @@ the external-funding cap and ledger reconciliation.
 
 ## Exact next steps
 
-1. Review the uncommitted diff, including the taxable-sale settlement change;
-   commit only when the user explicitly asks.
-2. Do not push without an explicit request.
-3. If extending the map, keep each new behavior in `src/projection_map.py` with a
+1. Push the verified commits to `origin/main` as explicitly requested.
+2. If extending the map, keep each new behavior in `src/projection_map.py` with a
    focused test; do not duplicate tax laws in the renderer.
-4. Run `python -m unittest discover tests -v` before changing behavior, and
+3. Run `python -m unittest discover tests -v` before changing behavior, and
    rebuild `dist/main.exe` after any source or help-text change.
 
 ## Relevant paths
