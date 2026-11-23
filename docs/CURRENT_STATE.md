@@ -24,9 +24,10 @@ Uniform Lifetime Table through age 120+.
 - Push target: `origin/main` at `https://github.com/kyle83704/finance.git`.
 - Verified commits were pushed to `origin/main` on 2026-11-23 without a force
   push. The local `main` branch tracks `origin/main`.
-- Current return-path work is uncommitted: `src/market_simulation.py`,
-  `tests/test_market_simulation.py`, `data/historical_returns_template.csv`,
-  simulator/model/optimizer integration, and documentation updates.
+- Return-path, 1,000-plan audit and RMD correction commit: `a45c6a5` —
+  `Add return path simulations and audit RMD math`.
+- This checkpoint update is the only change after that verified feature commit;
+  the executable is intentionally ignored by Git and remains in `dist/`.
 - Current release: `2.3.0` (`src/__init__.py`, GUI footer and docs agree).
 
 ## Verified implementation state
