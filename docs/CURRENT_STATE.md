@@ -19,7 +19,8 @@ the external-funding cap and ledger reconciliation.
   preserves the older unrelated GitHub initial commit without replacing the
   verified local tree or force-pushing.
 - Push target: `origin/main` at `https://github.com/kyle83704/finance.git`.
-- Working tree was clean before this checkpoint update.
+- Verified commits were pushed to `origin/main` on 2026-11-23 without a force
+  push. The local `main` branch tracks `origin/main`.
 - Current release: `2.3.0` (`src/__init__.py`, GUI footer and docs agree).
 
 ## Verified implementation state
@@ -128,10 +129,9 @@ the external-funding cap and ledger reconciliation.
 
 ## Exact next steps
 
-1. Push the verified commits to `origin/main` as explicitly requested.
-2. If extending the map, keep each new behavior in `src/projection_map.py` with a
+1. If extending the map, keep each new behavior in `src/projection_map.py` with a
    focused test; do not duplicate tax laws in the renderer.
-3. Run `python -m unittest discover tests -v` before changing behavior, and
+2. Run `python -m unittest discover tests -v` before changing behavior, and
    rebuild `dist/main.exe` after any source or help-text change.
 
 ## Relevant paths
