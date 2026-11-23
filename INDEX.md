@@ -1,6 +1,6 @@
 # Roth Conversion Simulator — Documentation Index
 
-Version **2.3.0 (Ledger edition)** · 98 automated tests passing
+Version **2.3.0 (Ledger edition)** · 107 automated tests passing
 
 ## Start here
 
@@ -38,6 +38,7 @@ python -m PyInstaller --noconfirm --clean main.spec
 - Explicit tax liability versus tax actually paid.
 - Taxable cost basis and realized gains.
 - Scenario comparison with correct isolation between runs.
+- 3D projection map with conversion and added-funds sensitivity and sweet spots.
 - HTML, Excel and CSV exports.
 - JSON project save/load.
 - Penny mascot and warm cream/teal/coral visual theme.
@@ -67,6 +68,8 @@ python -m PyInstaller --noconfirm --clean main.spec
 main.py                  Desktop entry point
 src/gui.py               Wizard, results, detail and export UI
 src/simulator.py         Year-by-year ledger, funding and conversion engine
+src/projection_map.py    Conversion-grid surface, tax-aware sweet spots
+tests/test_projection_map.py  Map grid, sweet spots, rendering and added funds
 src/optimizer.py         Objective policies, comparison and ranking
 src/tax_calculator.py    Federal/state tax, IRMAA, RMD, pro-rata, gain tax
 src/rules.py             Versioned rule and assumption registry
@@ -76,7 +79,7 @@ src/theme.py             Shared warm palette
 src/mascot.py            Penny renderer
 src/reports.py           HTML report and rule registry
 src/excel_report.py      Excel workbook report
-tests/                   98 automated tests
+tests/                   107 automated tests
 docs/TECHNICAL.md        Detailed technical reference
 ```
 

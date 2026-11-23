@@ -15,6 +15,7 @@ from src.gui import (
     _amount,
     _button,
     _expense_totals,
+    _recon_display,
     _section,
     _stepper,
     _title,
@@ -75,6 +76,11 @@ class TestLayoutHelpers(unittest.TestCase):
         button = _button('Go', color='#123456')
         self.assertIsInstance(button, sg.Button)
         self.assertEqual(button.ButtonColor, ('white', '#123456'))
+
+    def test_reconciliation_display_hides_negative_zero(self):
+        self.assertEqual(_recon_display(-0.0004), '$0.00')
+        self.assertEqual(_recon_display(-1.25), '-$1.25')
+        self.assertEqual(_recon_display(12.5), '$12.50')
 
 
 class TestThemeBackgrounds(unittest.TestCase):

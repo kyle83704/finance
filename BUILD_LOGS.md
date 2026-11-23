@@ -1,5 +1,131 @@
 # Roth Conversion Simulator - Build Logs
 
+## Taxable-sale settlement build (2026-11-23) - Complete
+
+- **Status**: Verified for commit and push.
+- **Scope**: fixed-point settlement of capital-gains tax created by taxable
+  sales used for tax funding, plus the completed map, UI and mascot work.
+- `python -m compileall -q main.py src tests` — exit 0.
+- `python -m unittest discover tests -v` — **108/108 passing**.
+- `python example_analysis.py` — exit 0.
+- `python -m PyInstaller --noconfirm --clean main.spec` — exit 0.
+- `dist/main.exe` — 80,388,165 bytes.
+- SHA-256 — `961467606955b67cba82d0e27089f0b44dcba3b172f35f0c3b383a9870d5eac3`.
+- Frozen launch — `LAUNCH_OK`; window title `Roth Conversion Simulator`.
+
+---
+
+## Penny farmer redesign (2026-11-11) - Complete
+
+- **Status**: Working tree uncommitted; no push performed.
+- **Scope**: replace the round piggy-bank body with an anthropomorphic pig
+  farmer: cream shirt, faded bib overalls with shoulder straps and brass
+  buttons, patched knee, rolled cuffs, hoof hands and cloven hoof feet. Keep
+  Penny's glasses, ears, snout and coin slot. Regenerate `docs/penny.png` and
+  the real-window UI captures.
+
+### Verification
+- `python -m compileall -q main.py src tests` — exit 0.
+- `python -m unittest discover tests -v` — **107/107 passing**;
+  log `build/farmer_penny_suite.txt`.
+- `python build/capture_ui.py` — exit 0; eleven fresh real-window screenshots;
+  log `build/capture_ui.log`.
+- `python -m PyInstaller --noconfirm --clean main.spec` — exit 0;
+  log `build/farmer_penny_build.log`.
+- `dist/main.exe` — 79,997,579 bytes.
+- SHA-256 — `5e2bc98ba46c716bae4fcd13765eb973028cf1d357ca6f650e3f5e54aa65fa2a`.
+- Frozen launch — `LAUNCH_OK`; window title `Roth Conversion Simulator`.
+
+---
+
+## Penny anatomy fix (2026-11-11) - Complete
+
+- **Status**: Working tree uncommitted; no push performed.
+- **Scope**: complete Penny's spectacles with a second temple arm; raise and
+  center the trotters so all four roots meet the belly; regenerate the README
+  mascot and real-window UI captures.
+
+### Verification
+- `python -m compileall -q main.py src tests` — exit 0.
+- `python -m unittest discover tests -v` — **107/107 passing**;
+  log `build/mascot_fix_suite.txt`.
+- `python build/capture_ui.py` — exit 0; eleven fresh real-window screenshots;
+  log `build/capture_ui.log`.
+- `python -m PyInstaller --noconfirm --clean main.spec` — exit 0;
+  log `build/mascot_fix_build.log`.
+- `dist/main.exe` — 79,994,827 bytes.
+- SHA-256 — `58ab92ff1ca7287887e5e3945ee3bac82e2c5048097bb7f71d9eb74380fcb427`.
+- Frozen launch — `LAUNCH_OK`; window title `Roth Conversion Simulator`.
+
+---
+
+## 3D Projection Map 2.3 (2026-11-11) - Complete
+
+- **Status**: Working tree uncommitted; no push performed.
+- **Basis**: `8f9e32b` plus the UI polish and projection-map changes.
+- **Scope**: add a results-window 3D map over a fixed conversion grid, optional
+  taxable added funds, tax-aware sweet spots, and a comparison table; add the
+  taxable-contribution cost-basis fix; enlarge the detail window so its action
+  row is fully visible.
+
+### Verification
+- `python -m compileall -q main.py src tests` — exit 0.
+- `python -m unittest discover tests -v` — **107/107 passing**;
+  log `build/projection_map_suite.txt`.
+- `python example_analysis.py` — exit 0; log `build/example_analysis.txt`.
+- `python build/capture_ui.py` — exit 0; eleven real-window screenshots,
+  including the 3D surface and sweet-spot table; log `build/capture_ui.log`.
+- `python -m PyInstaller --noconfirm --clean main.spec` — exit 0;
+  log `build/projection_map_build.log`.
+- `dist/main.exe` — 79,993,698 bytes.
+- SHA-256 — `58ffca4ed57d44957b0f998b37c86baf00654c5fddc28ed52afcc84a087d213f`.
+- Frozen launch — `LAUNCH_OK`; window title `Roth Conversion Simulator`.
+
+### Map notes
+- Every grid point is a normal simulator run with a fixed annual conversion.
+  The 3D surface plots projection year, annual conversion and after-tax net
+  worth; color is cumulative tax load including IRMAA.
+- Sweet spots are non-dominated on after-tax value and tax cost, with `Best net`
+  and `Lowest tax` marked in the table.
+- Added funds go to the first taxable account, or a synthetic taxable account
+  if none exists; they add cost basis and are not a deduction.
+- Advisory and trading fees are not modeled. The UI states this and suggests
+  entering fees as expenses if needed.
+
+---
+
+## UI Polish 2.3 (2026-11-11) - Complete
+
+- **Status**: Working tree uncommitted; no push performed.
+- **Basis**: `8f9e32b` plus the UI polish changes.
+- **Scope**: integrate Penny's ears and coin slot; flatten buttons; compact
+  account, income and expense forms; add field context; group scenario
+  objectives; split results into Comparison and Balances; reorder detail columns
+  and suppress `-$0.00` reconciliation output.
+
+### Verification
+- `python -m compileall -q main.py src tests` — exit 0.
+- `python -m unittest discover tests -v` — **99/99 passing**;
+  log `build/ui_fix_tests.txt`.
+- `python example_analysis.py` — exit 0; log `build/ui_fix_example.txt`.
+- `python build/capture_ui.py` — exit 0; real-window screenshots for menu,
+  five wizard panels, comparison, balances and detail.
+- `python -m PyInstaller --noconfirm --clean main.spec` — exit 0;
+  log `build/ui_fix_build.log`.
+- `dist/main.exe` — 79,977,765 bytes.
+- SHA-256 — `6b15b9ccb4a9ae723c11189897602e97bf36929de6cd9387a80cf6bab78ec3e4`.
+- Frozen launch — `LAUNCH_OK`; window title `Roth Conversion Simulator`.
+
+### UI notes
+- Account and income tables now render their saved items; the previous disabled
+  listboxes hid text.
+- The comparison table is limited to decision metrics, so all columns fit.
+  Deferred tax and asset balances live on the Balances tab.
+- Detail view keeps tax, spending and reconciliation columns in the visible
+  area; balances remain available by scrolling right.
+
+---
+
 ## Ledger 2.3 (2026-11-11) - Complete
 
 - **Status**: Complete
@@ -244,7 +370,7 @@ current semantics are defined by the 2.3.0 section above.
 - `app.py` (Flask web UI) still targets an older model API
   (`expected_growth_rate`, `source_type`, `annual_amount` on `Expenses`) and
   Flask is not in `requirements.txt`; it needs a real pass before use.
-- `dist/main.exe` is current for 2.3.0 (79,975,385 bytes); rebuild after future source changes.
+- `dist/main.exe` is current for the 2026-11-11 farmer build (79,997,579 bytes); rebuild after future source changes.
 - Limited error handling in some edge cases.
 - Performance could be improved for large datasets.
 

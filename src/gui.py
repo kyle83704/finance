@@ -10,7 +10,12 @@ from typing import Dict, List, Optional, Tuple
 import PySimpleGUI as sg
 
 from src import theme
-from src.constants import ACCOUNT_TYPES, OBJECTIVES, STATE_TAX_RATES
+from src.constants import (
+    ACCOUNT_TYPES,
+    OBJECTIVES,
+    PRETAX_ACCOUNT_TYPES,
+    STATE_TAX_RATES,
+)
 from src.excel_report import build_excel_report, write_excel_report
 from src.mascot import mascot_data_uri, mascot_png
 from src.models import (
@@ -18,11 +23,17 @@ from src.models import (
     ClientProfile,
     Expenses,
     IncomeStream,
+    ConversionStrategy,
     ScenarioSettings,
     load_project,
     save_project,
 )
-from src.optimizer import ConversionOptimizer
+from src.optimizer import ConversionOptimizer, OBJECTIVE_POLICIES
+from src.projection_map import (
+    build_projection_map,
+    conversion_grid,
+    render_projection_map,
+)
 from src.reports import build_html_report, write_html_report
 
 # ---------------------------------------------------------------------------
@@ -65,6 +76,7 @@ def _button(text: str, color: str = BRAND_GREEN, size: Tuple[int, int] = (15, 1)
         'size': size,
         'button_color': (text_color, color),
         'font': BUTTON_FONT if bold else BODY_FONT,
+        'border_width': 0,
     }
     if key:
         params['key'] = key
@@ -132,10 +144,25 @@ def _field(label: str, element, width: int = 17) -> List:
     return [sg.Text(label, size=(width,), font=BODY_FONT), element]
 
 
+def _hint(text: str, width: int = 76) -> List:
+    """Muted, wrapped context shown beneath a form."""
+    lines = text.splitlines() or ['']
+    return [sg.Text(text, size=(width, len(lines)), font=SMALL_FONT,
+                    text_color=MUTED_TEXT, pad=(0, (4, 6)))]
+
+
 def _amount(values: Dict, key: str) -> float:
     """Parse a currency field, treating blanks as zero."""
     raw = (values.get(key) or '').strip()
     return float(raw) if raw else 0.0
+
+
+def _recon_display(value: float) -> str:
+    """Format reconciliation without a misleading negative zero."""
+    if abs(value) < 0.005:
+        value = 0.0
+    sign = '-' if value < 0 else ''
+    return f"{sign}${abs(value):,.2f}"
 
 
 def _expense_totals(values: Dict) -> Tuple[float, float]:
@@ -219,7 +246,8 @@ class RothSimulatorGUI:
             'A friendlier way to plan tax-smart conversions, from today through age 100+.',
         ) + [
             [sg.Column([hero], pad=(0, (4, 10)), element_justification='center')],
-            [sg.Text('Start a new plan or reopen one you saved earlier.',
+            [sg.Text('Start a new plan, or reopen one you saved earlier. '
+                     'Your inputs stay on this computer.',
                      font=BODY_FONT, text_color=MUTED_TEXT)],
             [sg.Text('')],
             [_primary('New Analysis', size=(24, 2), key='new_analysis',
@@ -229,13 +257,14 @@ class RothSimulatorGUI:
             [_secondary('Help', size=(14, 1), key='help',
                         tooltip='Explain Roth conversions, IRMAA and RMDs'),
              _danger('Exit', size=(14, 1), key='exit')],
-            [sg.Text('')],
+            [sg.Text('Educational estimate — not tax, legal or investment advice.',
+                     font=SMALL_FONT, text_color=FAINT_TEXT)],
             [sg.Text('Version 2.3 · Ledger edition · cash-flow accounting, tax funding and 2026 law',
                      font=SMALL_FONT, text_color=FAINT_TEXT)],
         ]
 
         window = sg.Window('Roth Conversion Simulator', layout, finalize=True,
-                           size=(760, 560), element_justification='center',
+                           size=(760, 620), element_justification='center',
                            icon=self.icon)
 
         while True:
@@ -451,6 +480,9 @@ class RothSimulatorGUI:
             _field('State Residence', sg.Combo(sorted(STATE_TAX_RATES.keys()),
                                               key='state', default_value='ID',
                                               size=(26,), font=BODY_FONT)),
+            _hint('Birth year drives RMD age. The married toggle sets filing status.\n'
+                  'State tax is a flat planning approximation, not a state return.',
+                  width=58),
             [sg.Text('')],
             [_primary('Next', key='next', size=(15, 1)),
              _neutral('Cancel', key='cancel', size=(15, 1))],
@@ -510,33 +542,50 @@ class RothSimulatorGUI:
         """Collect account information."""
         accounts = []
 
+        left_form = [
+            _field('Account Name', sg.Input(key='acc_name', size=(24,), font=BODY_FONT,
+                                           tooltip='A label you will recognize in reports.')),
+            _field('Account Type', sg.Combo(ACCOUNT_TYPES, key='acc_type',
+                                           size=(22,), font=BODY_FONT,
+                                           tooltip='This determines whether the account is pre-tax, Roth or taxable.')),
+            _field('Current Balance', sg.Input(key='acc_balance', size=(24,), font=BODY_FONT,
+                                              tooltip='Today’s account value, before future growth.')),
+        ]
+        right_form = [
+            _field('Pre-tax Basis', sg.Input(key='acc_pretax', size=(24,), font=BODY_FONT,
+                                             tooltip='Deductible contributions, if tracked separately.')),
+            _field('After-tax Basis', sg.Input(key='acc_aftertax', size=(24,), font=BODY_FONT,
+                                               tooltip='Non-deductible IRA contributions; used for pro-rata conversion tax.'),
+                   width=19),
+            _field('Taxable Cost Basis', sg.Input(key='acc_cost_basis', size=(24,),
+                                                 font=BODY_FONT,
+                                                 tooltip='What you paid for taxable holdings; used to calculate realized gains.'),
+                   width=19),
+            _field('Expected Growth %', sg.Input('7.0', key='acc_growth', size=(24,),
+                                                font=BODY_FONT,
+                                                tooltip='Average annual return, e.g. 7 for 7%'),
+                   width=19),
+            _field('Annual Contribution', sg.Input('0', key='acc_contrib', size=(24,),
+                                                  font=BODY_FONT,
+                                                  tooltip='Added before annual growth; leave zero if none.'),
+                   width=19),
+        ]
         layout = _title(
             'Accounts',
             'Add every retirement and investment account that matters for the plan.',
             step=2,
         ) + [
-            _field('Account Name', sg.Input(key='acc_name', size=(26,), font=BODY_FONT)),
-            _field('Account Type', sg.Combo(ACCOUNT_TYPES, key='acc_type',
-                                           size=(24,), font=BODY_FONT)),
-            _field('Current Balance', sg.Input(key='acc_balance', size=(26,), font=BODY_FONT)),
-            _field('Pre-tax Basis', sg.Input(key='acc_pretax', size=(26,), font=BODY_FONT)),
-            _field('After-tax Basis', sg.Input(key='acc_aftertax', size=(26,), font=BODY_FONT)),
-            _field('Taxable Cost Basis', sg.Input(key='acc_cost_basis', size=(26,),
-                                                 font=BODY_FONT,
-                                                 tooltip='Original cost of taxable holdings; used to calculate realized gains.')),
-            _field('Expected Growth %', sg.Input('7.0', key='acc_growth', size=(26,),
-                                                font=BODY_FONT,
-                                                tooltip='Average annual return, e.g. 7 for 7%')),
-            _field('Annual Contribution', sg.Input('0', key='acc_contrib', size=(26,),
-                                                  font=BODY_FONT)),
-            [sg.Text('')],
+            [sg.Column(left_form, vertical_alignment='top'),
+             sg.Column(right_form, vertical_alignment='top', pad=(18, 0))],
+            _hint('Retirement accounts: enter after-tax basis only for non-deductible contributions.\n'
+                  'Taxable accounts: cost basis is what you paid; gains are taxed when the plan sells.',
+                  width=78),
             [_primary('Add Account', key='add_account', size=(15, 1)),
              _neutral('Done', key='done', size=(15, 1)),
              _danger('Cancel', key='cancel', size=(12, 1))],
-            [sg.Text('')],
             _section('Accounts added'),
-            [sg.Listbox([], key='acc_list', size=(66, 7), font=BODY_FONT,
-                        disabled=True, no_scrollbar=False,
+            [sg.Listbox([], key='acc_list', size=(78, 4), font=BODY_FONT,
+                        no_scrollbar=True,
                         background_color=theme.SURFACE, text_color=theme.TEXT,
                         highlight_background_color=theme.TEAL_SOFT,
                         highlight_text_color=theme.NAVY)],
@@ -622,33 +671,50 @@ class RothSimulatorGUI:
         """Collect income stream information."""
         income_streams = []
 
+        left_form = [
+            _field('Income Name', sg.Input(key='inc_name', size=(24,), font=BODY_FONT,
+                                           tooltip='A label for this income source.')),
+            _field('Type', sg.Combo(['W2 Income', 'Self-Employment', 'Social Security',
+                                     'Pension', 'Dividends'],
+                                    key='inc_type', size=(22,), font=BODY_FONT,
+                                    tooltip='Social Security is taxed under provisional-income rules.')),
+            _field('Annual Amount', sg.Input(key='inc_amount', size=(24,), font=BODY_FONT,
+                                             tooltip='Today’s annual gross amount, before growth.')),
+        ]
+        right_form = [
+            _field('Start Age', sg.Input('65', key='inc_start', size=(24,), font=BODY_FONT,
+                                         tooltip='First age this income is received.'),
+                   width=19),
+            _field('End Age', sg.Input('100', key='inc_end', size=(24,), font=BODY_FONT,
+                                       tooltip='Last age this income is received.'),
+                   width=19),
+            _field('Annual Growth %', sg.Input('0', key='inc_growth', size=(24,),
+                                              font=BODY_FONT,
+                                              tooltip='Cost-of-living adjustment, e.g. 2.5 for 2.5%'),
+                   width=19),
+            _field('Tax Treatment', sg.Combo(['Ordinary Income', 'Qualified Dividends', 'Tax-Free'],
+                                            key='inc_tax', default_value='Ordinary Income',
+                                            size=(21,), font=BODY_FONT,
+                                            tooltip='Choose how this income is taxed.'),
+                   width=19),
+        ]
         layout = _title(
             'Income Streams',
             'Add Social Security, pensions, part-time work and other income.',
             step=3,
         ) + [
-            _field('Income Name', sg.Input(key='inc_name', size=(26,), font=BODY_FONT)),
-            _field('Type', sg.Combo(['W2 Income', 'Self-Employment', 'Social Security',
-                                     'Pension', 'Dividends'],
-                                    key='inc_type', size=(24,), font=BODY_FONT)),
-            _field('Annual Amount', sg.Input(key='inc_amount', size=(26,), font=BODY_FONT)),
-            _field('Start Age', sg.Input('65', key='inc_start', size=(26,), font=BODY_FONT)),
-            _field('End Age', sg.Input('100', key='inc_end', size=(26,), font=BODY_FONT)),
-            _field('Annual Growth %', sg.Input('0', key='inc_growth', size=(26,),
-                                              font=BODY_FONT,
-                                              tooltip='Cost-of-living adjustment, e.g. 2.5 for 2.5%')),
-            _field('Tax Treatment', sg.Combo(['Ordinary Income', 'Qualified Dividends', 'Tax-Free'],
-                                            key='inc_tax', default_value='Ordinary Income',
-                                            size=(24,), font=BODY_FONT)),
-            [sg.Text('')],
+            [sg.Column(left_form, vertical_alignment='top'),
+             sg.Column(right_form, vertical_alignment='top', pad=(18, 0))],
+            _hint('Enter today’s gross annual amounts. Growth is a COLA assumption applied from the start age.\n'
+                  'Social Security is entered once here; do not also add it as a pension.',
+                  width=78),
             [_primary('Add Income', key='add_income', size=(15, 1)),
              _neutral('Done', key='done', size=(15, 1)),
              _danger('Cancel', key='cancel', size=(12, 1))],
-            [sg.Text('')],
             _section('Income streams added'),
-            [sg.Listbox([], key='inc_list', size=(66, 7), font=BODY_FONT,
-                        disabled=True, background_color=theme.SURFACE,
-                        text_color=theme.TEXT,
+            [sg.Listbox([], key='inc_list', size=(78, 4), font=BODY_FONT,
+                        no_scrollbar=True,
+                        background_color=theme.SURFACE, text_color=theme.TEXT,
                         highlight_background_color=theme.TEAL_SOFT,
                         highlight_text_color=theme.NAVY)],
         ]
@@ -722,25 +788,33 @@ class RothSimulatorGUI:
 
     def step_expenses(self) -> Optional[Expenses]:
         """Collect expense information."""
+        left_form = [
+            _field('Housing', sg.Input(key='housing', size=(20,), font=BODY_FONT, enable_events=True)),
+            _field('Food', sg.Input(key='food', size=(20,), font=BODY_FONT, enable_events=True)),
+            _field('Healthcare', sg.Input(key='healthcare', size=(20,), font=BODY_FONT, enable_events=True)),
+            _field('Discretionary', sg.Input(key='discretionary', size=(20,), font=BODY_FONT, enable_events=True)),
+        ]
+        right_form = [
+            _field('Utilities', sg.Input(key='utilities', size=(20,), font=BODY_FONT, enable_events=True)),
+            _field('Transportation', sg.Input(key='transportation', size=(20,), font=BODY_FONT, enable_events=True)),
+            _field('Insurance', sg.Input(key='insurance', size=(20,), font=BODY_FONT, enable_events=True)),
+            _field('Other', sg.Input(key='other', size=(20,), font=BODY_FONT, enable_events=True)),
+        ]
         layout = _title(
             'Annual Expenses',
             'Enter expected yearly spending by category. Totals update as you type.',
             step=4,
         ) + [
-            _field('Housing', sg.Input(key='housing', size=(20,), font=BODY_FONT, enable_events=True)),
-            _field('Utilities', sg.Input(key='utilities', size=(20,), font=BODY_FONT, enable_events=True)),
-            _field('Food', sg.Input(key='food', size=(20,), font=BODY_FONT, enable_events=True)),
-            _field('Transportation', sg.Input(key='transportation', size=(20,), font=BODY_FONT, enable_events=True)),
-            _field('Healthcare', sg.Input(key='healthcare', size=(20,), font=BODY_FONT, enable_events=True)),
-            _field('Insurance', sg.Input(key='insurance', size=(20,), font=BODY_FONT, enable_events=True)),
-            _field('Discretionary', sg.Input(key='discretionary', size=(20,), font=BODY_FONT, enable_events=True)),
-            _field('Other', sg.Input(key='other', size=(20,), font=BODY_FONT, enable_events=True)),
+            [sg.Column(left_form, vertical_alignment='top'),
+             sg.Column(right_form, vertical_alignment='top', pad=(18, 0))],
+            _hint('Enter annual amounts. Spending is paid from cash first, then taxable assets.\n'
+                  'If those run out, the shortfall is reported in results—it is not invented.',
+                  width=70),
             [sg.HorizontalSeparator(color=SEPARATOR_COLOR, pad=(0, (8, 8)))],
             _field('Total Monthly', sg.Text('$0', key='monthly_total', size=(20,),
                                            font=SECTION_FONT, text_color=BRAND_GREEN)),
             _field('Total Annual', sg.Text('$0', key='annual_total', size=(20,),
                                           font=SECTION_FONT, text_color=BRAND_GREEN)),
-            [sg.Text('')],
             [_primary('Next', key='next', size=(15, 1)),
              _neutral('Clear', key='clear', size=(15, 1)),
              _danger('Cancel', key='cancel', size=(12, 1))],
@@ -782,38 +856,57 @@ class RothSimulatorGUI:
     def step_scenario_selection(self) -> Optional[List[ScenarioSettings]]:
         """Select which scenarios to analyze."""
         current_year = datetime.now().year
+        preferred_order = [
+            'Maximize Gross Net Worth', 'Maximize Roth Value',
+            'Balanced Growth', 'Minimize Tax Paid',
+            'Minimize IRMAA Impact', 'Maximize Inheritance',
+        ]
+        objective_index = {objective: index
+                           for index, objective in enumerate(OBJECTIVES)}
+        display_order = ([objective for objective in preferred_order
+                          if objective in objective_index]
+                         + [objective for objective in OBJECTIVES
+                            if objective not in preferred_order])
         objective_rows = []
-        for index, objective in enumerate(OBJECTIVES):
-            objective_rows.append([
-                sg.Checkbox(objective, key=f'obj_{index}', font=BODY_FONT,
-                            default=objective != 'Maximize Inheritance')
-            ])
+        for start in range(0, len(display_order), 2):
+            row = []
+            for objective in display_order[start:start + 2]:
+                row.append(sg.Checkbox(
+                    objective, key=f'obj_{objective_index[objective]}',
+                    font=BODY_FONT,
+                    default=objective != 'Maximize Inheritance',
+                    size=(28, 1), pad=(0, 2),
+                    tooltip=OBJECTIVE_POLICIES.get(objective, {}).get(
+                        'description', ''),
+                ))
+            objective_rows.append(row)
 
         layout = _title(
             'Scenario Selection',
             'Choose the objectives to compare and the projection window.',
             step=5,
         ) + objective_rows + [
+            _hint('Each selected policy uses the same inputs but a different bracket and IRMAA rule.\n'
+                  'Compare the trade-offs; the largest Roth balance is not automatically the best plan.',
+                  width=78),
             [sg.HorizontalSeparator(color=SEPARATOR_COLOR, pad=(0, (8, 8)))],
             [sg.Text('Analysis Period', size=(15,), font=SECTION_FONT)],
             [sg.Text('From Year:', size=(10,), font=BODY_FONT),
              sg.Input(str(current_year), key='start_year', size=(10,), font=BODY_FONT),
              sg.Text('To Year:', size=(10,), font=BODY_FONT),
              sg.Input(str(current_year + 29), key='end_year', size=(10,), font=BODY_FONT)],
-            [sg.Text('Tax Funding', size=(15,), font=SECTION_FONT),
-             sg.Text('How should taxes be paid?', font=BODY_FONT, text_color=MUTED_TEXT)],
-            [sg.Text('Payment source:', size=(26,), font=BODY_FONT),
+            [sg.Text('Tax Funding', size=(15,), font=SECTION_FONT)],
+            _hint('Choose how the tax bill is paid. External money is capped at the amount you enter.\n'
+                  'Unpaid tax stays visible; the deferred rate is a planning assumption, not a forecast.',
+                  width=78),
+            [sg.Text('Payment source:', size=(24,), font=BODY_FONT),
              sg.Combo(['Cash', 'Withhold from conversion', 'Sell taxable assets',
                        'External funds'], key='tax_source', default_value='Cash',
-                      readonly=True, size=(28,), font=BODY_FONT)],
-            [sg.Text('External funds available ($/yr):', size=(26,), font=BODY_FONT),
-             sg.Input('0', key='external_funding', size=(14,), font=BODY_FONT)],
-            [sg.Text('Deferred tax on remaining pre-tax (%):', size=(26,), font=BODY_FONT),
-             sg.Input('22', key='deferred_rate', size=(14,), font=BODY_FONT)],
-            [sg.Text('External funds are used only when explicitly entered; '
-                     'the simulator never assumes unlimited outside cash.',
-                     font=SMALL_FONT, text_color=MUTED_TEXT)],
-            [sg.Text('')],
+                      readonly=True, size=(26,), font=BODY_FONT)],
+            [sg.Text('External funds ($/yr):', size=(24,), font=BODY_FONT),
+             sg.Input('0', key='external_funding', size=(12,), font=BODY_FONT),
+             sg.Text('Deferred tax (%):', size=(16,), font=BODY_FONT),
+             sg.Input('22', key='deferred_rate', size=(8,), font=BODY_FONT)],
             [_primary('Run Analysis', key='run', size=(15, 1)),
              _danger('Cancel', key='cancel', size=(12, 1))],
         ]
@@ -973,7 +1066,7 @@ class RothSimulatorGUI:
         """Display analysis results in a tabbed, modern window."""
         comparison_df = optimizer.compare_strategies(self.strategies)
         best = max(self.strategies, key=lambda s: s.final_net_worth)
-        summary = (f"Best final net worth: {best.scenario.name} · "
+        summary = (f"Best gross net worth: {best.scenario.name} · "
                    f"${best.final_net_worth:,.0f}")
 
         thrifty = min(self.strategies,
@@ -993,22 +1086,83 @@ class RothSimulatorGUI:
         summary_row.append(sg.Column(summary_cells, pad=(14, 0),
                                      vertical_alignment='center'))
 
+        summary_df = comparison_df[[
+            'Strategy', 'Total Conversions', 'Total Taxes Paid',
+            'Total Tax Liability', 'Tax Unpaid', 'Total IRMAA Costs',
+            'Final Net Worth', 'Net After All Taxes',
+        ]].copy()
+        summary_df['Strategy'] = summary_df['Strategy'].str.replace(
+            ' Strategy', '', regex=False)
+        summary_df = summary_df.rename(columns={
+            'Total Conversions': 'Conversions',
+            'Total Taxes Paid': 'Tax Paid',
+            'Total Tax Liability': 'Liability',
+            'Tax Unpaid': 'Unpaid',
+            'Total IRMAA Costs': 'IRMAA',
+            'Final Net Worth': 'Gross Net Worth',
+            'Net After All Taxes': 'Net After Tax',
+        })
+
+        balances_df = comparison_df[[
+            'Strategy', 'Final Roth Value', 'Final Pretax Value',
+            'Final Taxable Value', 'Final Net Worth',
+            'Deferred Tax Reserve', 'Net After All Taxes',
+        ]].copy()
+        balances_df['Strategy'] = balances_df['Strategy'].str.replace(
+            ' Strategy', '', regex=False)
+        balances_df = balances_df.rename(columns={
+            'Final Roth Value': 'Roth',
+            'Final Pretax Value': 'Pre-tax',
+            'Final Taxable Value': 'Taxable',
+            'Final Net Worth': 'Gross Net Worth',
+            'Deferred Tax Reserve': 'Deferred Tax',
+            'Net After All Taxes': 'Net After Tax',
+        })
+        row_count = max(3, min(12, len(self.strategies)))
+
         comparison_tab = [
             summary_row,
+            [sg.Text('Gross Net Worth is before deferred tax. Net After Tax is the planning view.\n'
+                     'Tax Paid is funded tax; Liability is total tax and Unpaid remains a liability. '
+                     'Deferred tax and balances are on the Balances tab.',
+                     font=SMALL_FONT, text_color=MUTED_TEXT)],
             [sg.Table(
-                values=comparison_df.values.tolist(),
-                headings=comparison_df.columns.tolist(),
+                values=summary_df.values.tolist(),
+                headings=summary_df.columns.tolist(),
                 key='results_table',
-                size=(100, 12),
-                num_rows=12,
+                size=(105, row_count),
+                num_rows=row_count,
                 justification='right',
-                font=BODY_FONT,
+                font=SMALL_FONT,
                 text_color=theme.TEXT,
                 background_color=theme.SURFACE,
                 header_background_color=BRAND_GREEN,
                 header_text_color='white',
                 alternating_row_color='#F7FBF9',
-                auto_size_columns=True,
+                auto_size_columns=False,
+                col_widths=[24, 11, 9, 9, 8, 6, 13, 12],
+            )],
+        ]
+
+        balances_tab = [
+            [sg.Text('Year-end balances. Deferred Tax is a planning reserve, '
+                     'not a filed liability.',
+                     font=SMALL_FONT, text_color=MUTED_TEXT)],
+            [sg.Table(
+                values=balances_df.values.tolist(),
+                headings=balances_df.columns.tolist(),
+                key='balances_table',
+                size=(105, row_count),
+                num_rows=row_count,
+                justification='right',
+                font=SMALL_FONT,
+                text_color=theme.TEXT,
+                background_color=theme.SURFACE,
+                header_background_color=BRAND_GREEN,
+                header_text_color='white',
+                alternating_row_color='#F7FBF9',
+                auto_size_columns=False,
+                col_widths=[24, 11, 11, 11, 13, 10, 12],
             )],
         ]
 
@@ -1020,17 +1174,18 @@ class RothSimulatorGUI:
                       font=BODY_FONT, text_color=MUTED_TEXT)]]
         )
 
+        strategy_word = 'strategy' if len(self.strategies) == 1 else 'strategies'
         layout = _title(
             'Analysis Results',
             f"{self.client.first_name} {self.client.last_name} · "
-            f"{len(self.strategies)} strategies compared",
+            f"{len(self.strategies)} {strategy_word} compared",
         ) + [
             [sg.TabGroup(
                 [[sg.Tab('Comparison', comparison_tab),
+                  sg.Tab('Balances', balances_tab),
                   sg.Tab('Chart', chart_tab)]],
                 key='results_tabs',
                 expand_x=True,
-                expand_y=True,
                 background_color=PANEL_BG,
                 tab_background_color=theme.SOFT_PEACH,
                 selected_background_color=theme.SURFACE,
@@ -1038,22 +1193,21 @@ class RothSimulatorGUI:
                 title_color=MUTED_TEXT,
                 border_width=0,
             )],
-            [sg.Text('Tax liability includes income tax, taxable Social '
-                     'Security, RMD tax, conversion tax, realized gains and IRMAA. '
-                     'Tax paid shows how much was actually funded; unpaid tax and '
-                     'the deferred-tax reserve reduce after-tax net worth. Save '
-                     'the project or export HTML/Excel/CSV reports for review.',
+            [sg.Text('Tax liability includes income, conversion, gain and IRMAA. '
+                     'Tax paid is what was actually funded. Save the project or '
+                     'export HTML/Excel/CSV reports for review.',
                      font=SMALL_FONT, text_color=MUTED_TEXT)],
             [_primary('Save Project', key='save_project'),
              _neutral('Export to CSV', key='export_csv'),
              _secondary('HTML Report', key='export_report'),
              _neutral('Excel Report', key='export_excel'),
+             _neutral('3D Map', key='projection_map'),
              _neutral('Detail View', key='detail_view'),
              _danger('Back to Menu', key='back')],
         ]
 
         window = sg.Window('Analysis Results', layout, finalize=True,
-                           size=(1220, 640), icon=self.icon)
+                           size=(1220, 720), icon=self.icon)
 
         while True:
             event, _ = window.read()
@@ -1080,6 +1234,8 @@ class RothSimulatorGUI:
                 self.export_html_report(optimizer)
             elif event == 'export_excel':
                 self.export_excel_report(optimizer)
+            elif event == 'projection_map':
+                self.show_projection_map()
             elif event == 'detail_view':
                 self.show_detail_view(optimizer)
 
@@ -1122,17 +1278,189 @@ class RothSimulatorGUI:
         window.close()
         return choice
 
-    def show_detail_view(self, optimizer: ConversionOptimizer):
-        """Show detailed year-by-year view for a strategy."""
+    def _default_map_max_conversion(self, base: ScenarioSettings) -> float:
+        """Pick a useful starting conversion range from current pre-tax assets."""
+        pretax = sum(
+            account.current_balance for account in self.accounts
+            if account.account_type in PRETAX_ACCOUNT_TYPES
+        )
+        years = max(1, base.end_year - base.start_year + 1)
+        annual = pretax / years if pretax else 0.0
+        return max(50_000, min(300_000, round(annual * 4, -3)))
+
+    def show_projection_map(self):
+        """Show a 3D fixed-conversion grid with tax-aware sweet spots."""
         if not self.strategies:
+            sg.popup_error('Run an analysis before opening the 3D map.',
+                           title='No Analysis', font=BODY_FONT)
             return
 
-        strategy_names = [s.scenario.name for s in self.strategies]
-        choice = self._choose_strategy(strategy_names)
-        if not choice:
-            return
+        base = self.strategies[0].scenario
+        default_max = self._default_map_max_conversion(base)
+        def rows_for(points):
+            rows = []
+            for point in points:
+                markers = []
+                if point.is_best_net:
+                    markers.append('Best net')
+                if point.is_lowest_tax:
+                    markers.append('Lowest tax')
+                if point.is_sweet_spot:
+                    markers.insert(0, '★')
+                rows.append([
+                    f"${point.conversion_target:,.0f}",
+                    f"${point.final_after_tax_net_worth:,.0f}",
+                    f"${point.tax_load:,.0f}",
+                    f"{point.incremental_net:+,.0f}",
+                    f"{point.incremental_tax:+,.0f}",
+                    ' / '.join(markers),
+                ])
+            return rows
 
-        strategy = self.strategies[strategy_names.index(choice)]
+        def build(values):
+            extra = max(
+                0.0,
+                float((values.get('map_extra') or '0').replace(',', '').strip()
+                      or 0),
+            )
+            max_conversion = float(
+                (values.get('map_max') or '0').replace(',', '').strip() or 0
+            )
+            if max_conversion <= 0:
+                raise ValueError('Maximum annual conversion must be greater than zero.')
+            steps = int(values.get('map_steps') or 7)
+            targets = conversion_grid(max_conversion, steps)
+            result = build_projection_map(
+                self.client,
+                base,
+                self.accounts,
+                self.income_streams,
+                self.expenses,
+                targets,
+                extra_annual_funds=extra,
+            )
+            chart = render_projection_map(result)
+            ordered = sorted(
+                result.points,
+                key=lambda point: point.final_after_tax_net_worth,
+                reverse=True,
+            )
+            window['map_chart'].update(data=chart)
+            window['map_table'].update(
+                values=rows_for(ordered),
+                select_rows=[0] if ordered else [],
+            )
+            added = (
+                f"${extra:,.0f}/yr to {result.added_funds_account}"
+                if extra > 0 else 'none'
+            )
+            window['map_context'].update(
+                f"{len(result.points)} paths · {len(result.years)} years · "
+                f"added funds: {added} · height = after-tax value · color = "
+                "cumulative tax incl. IRMAA · advisory/trading fees not modeled"
+            )
+            window.refresh()
+            return result
+
+        layout = _title(
+            '3D Projection Map',
+            'See how annual conversions and added funds change after-tax value and tax cost.',
+        ) + [
+            [sg.Text('Extra annual funds ($/yr):', font=BODY_FONT),
+             sg.Input('0', key='map_extra', size=(11,), font=BODY_FONT,
+                      tooltip='Added to the first taxable account; no deduction is assumed.'),
+             sg.Text('Max annual conversion:', font=BODY_FONT),
+             sg.Input(f'{default_max:,.0f}', key='map_max', size=(11,),
+                      font=BODY_FONT),
+             sg.Text('Grid points:', font=BODY_FONT),
+             sg.Combo(['5', '7', '9'], default_value='7', key='map_steps',
+                      readonly=True, size=(4,), font=BODY_FONT),
+             _primary('Build Map', key='build_map', size=(12, 1))],
+            [sg.Text('Added funds are taxable contributions. Advisory and trading '
+                     'fees are not modeled; enter them as expenses if needed.',
+                     font=SMALL_FONT, text_color=MUTED_TEXT)],
+            [sg.TabGroup(
+                [[sg.Tab('3D Surface', [
+                    [sg.Image(data=None, key='map_chart')],
+                ]),
+                  sg.Tab('Sweet Spots', [
+                    [sg.Text('Stars mark points no other grid point beats on both '
+                             'after-tax value and tax cost. Negative tax vs 0% means '
+                             'lifetime tax is lower than the no-conversion path.',
+                             font=SMALL_FONT, text_color=MUTED_TEXT)],
+                    [sg.Table(
+                        values=[],
+                        headings=['Conversion', 'After-tax', 'Tax + IRMAA',
+                                  'Extra net', 'Tax vs 0%', 'Markers'],
+                        key='map_table',
+                        size=(112, 7),
+                        num_rows=7,
+                        justification='right',
+                        font=SMALL_FONT,
+                        text_color=theme.TEXT,
+                        background_color=theme.SURFACE,
+                        header_background_color=BRAND_GREEN,
+                        header_text_color='white',
+                        alternating_row_color='#F7FBF9',
+                        auto_size_columns=False,
+                        col_widths=[12, 13, 12, 12, 12, 22],
+                    )],
+                  ])]],
+                key='map_tabs',
+                expand_x=True,
+                background_color=PANEL_BG,
+                tab_background_color=theme.SOFT_PEACH,
+                selected_background_color=theme.SURFACE,
+                selected_title_color=NAVY,
+                title_color=MUTED_TEXT,
+                border_width=0,
+            )],
+            [sg.Text('Building map…', key='map_context', font=SMALL_FONT,
+                     text_color=MUTED_TEXT, size=(118, 1))],
+            [_danger('Close', key='close')],
+        ]
+
+        window = sg.Window('3D Projection Map', layout, finalize=True,
+                           modal=True, size=(1180, 790), icon=self.icon)
+        window.refresh()
+
+        try:
+            initial_values = {
+                'map_extra': window['map_extra'].get(),
+                'map_max': window['map_max'].get(),
+                'map_steps': window['map_steps'].get(),
+            }
+            build(initial_values)
+        except Exception as exc:
+            window['map_context'].update(f'Map error: {exc}')
+
+        while True:
+            event, values = window.read()
+            if event in (sg.WINDOW_CLOSED, 'close'):
+                break
+            if event == 'build_map':
+                try:
+                    build(values)
+                except Exception as exc:
+                    sg.popup_error(f'Could not build the projection map:\n{exc}',
+                                   title='Projection Map Error', font=BODY_FONT)
+
+
+        window.close()
+
+    def show_detail_view(self, optimizer: ConversionOptimizer,
+                         strategy: Optional[ConversionStrategy] = None):
+        """Show detailed year-by-year view for a strategy."""
+        if strategy is None:
+            if not self.strategies:
+                return
+            strategy_names = [s.scenario.name for s in self.strategies]
+            choice = self._choose_strategy(strategy_names)
+            if not choice:
+                return
+            strategy = self.strategies[strategy_names.index(choice)]
+        else:
+            choice = strategy.scenario.name
 
         # Create year-by-year data
         data = []
@@ -1140,48 +1468,51 @@ class RothSimulatorGUI:
             data.append([
                 year_result.year,
                 year_result.age,
-                f"${year_result.start_balance_pretax:,.0f}",
+                f"${year_result.recommended_conversion:,.0f}",
                 f"${year_result.rmd_required:,.0f}",
                 f"${year_result.taxable_social_security:,.0f}",
-                f"${year_result.recommended_conversion:,.0f}",
-                f"${year_result.conversion_tax:,.0f}",
-                f"${year_result.irmaa_impact:,.0f}",
-                f"${year_result.magi:,.0f}",
-                f"${year_result.irmaa_magi:,.0f}",
-                f"${year_result.end_balance_roth:,.0f}",
                 f"${year_result.total_tax_paid:,.0f}",
                 f"${year_result.taxes_paid:,.0f}",
                 f"${year_result.taxes_unpaid:,.0f}",
                 f"${year_result.spending_paid:,.0f}",
-                f"${year_result.reconciliation_difference:,.2f}",
+                _recon_display(year_result.reconciliation_difference),
+                f"${year_result.magi:,.0f}",
+                f"${year_result.irmaa_impact:,.0f}",
+                f"${year_result.start_balance_pretax:,.0f}",
+                f"${year_result.end_balance_roth:,.0f}",
             ])
 
-        headings = ['Year', 'Age', 'Start Pretax', 'RMD', 'Taxable SS',
-                    'Conversion', 'Conv. Tax', 'IRMAA', 'MAGI', 'IRMAA MAGI',
-                    'End Roth', 'Tax Liability', 'Tax Paid', 'Tax Unpaid',
-                    'Spending Paid', 'Recon Diff']
+        headings = ['Year', 'Age', 'Conversion', 'RMD', 'Taxable SS',
+                    'Tax Due', 'Tax Paid', 'Tax Unpaid', 'Spending', 'Recon',
+                    'MAGI', 'IRMAA', 'Start Pre-tax', 'End Roth']
 
+        row_count = max(4, min(18, len(data)))
         layout = _title('Detail View', choice) + [
+            [sg.Text('Tax Due includes income, conversion, gain and IRMAA. '
+                     'Tax Paid is funded; Recon should be $0.00. '
+                     'Scroll right for balances.',
+                     font=SMALL_FONT, text_color=MUTED_TEXT)],
             [sg.Table(
                 values=data,
                 headings=headings,
                 key='detail_table',
-                size=(142, 18),
-                num_rows=18,
+                size=(118, row_count),
+                num_rows=row_count,
                 justification='right',
-                font=BODY_FONT,
+                font=SMALL_FONT,
                 text_color=theme.TEXT,
                 background_color=theme.SURFACE,
                 header_background_color=BRAND_GREEN,
                 header_text_color='white',
                 alternating_row_color='#F7FBF9',
-                auto_size_columns=True,
+                auto_size_columns=False,
+                col_widths=[6, 5, 10, 9, 10, 10, 9, 9, 10, 8, 10, 8, 12, 10],
             )],
             [_neutral('Close', key='close')],
         ]
 
         window = sg.Window('Strategy Detail', layout, finalize=True,
-                           size=(1380, 580), modal=True, icon=self.icon)
+                           size=(1180, 700), modal=True, icon=self.icon)
 
         while True:
             event, _ = window.read()
@@ -1250,6 +1581,17 @@ CASH FLOW AND TAX FUNDING:
   reserve on remaining pre-tax balances reduce Net After All Taxes.
 - The HTML report includes the rule registry so verified law, planning
   assumptions and unsupported areas are easy to review.
+
+3D PROJECTION MAP:
+
+Choose 3D Map from the results window. Each point in the grid is a full
+simulation with a fixed annual Roth conversion. You can add extra annual funds;
+they are taxable contributions to the first taxable account (a synthetic taxable
+account is created if needed), not a deduction. The surface shows projection
+year, annual conversion and after-tax net worth. Color is cumulative tax load
+including IRMAA. The Sweet Spots tab marks paths not beaten on both after-tax
+value and tax cost, with Best net and Lowest tax identified. Advisory and trading
+fees are not modeled; enter them as expenses if needed.
 
 REPORTS:
 

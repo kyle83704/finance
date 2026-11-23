@@ -41,6 +41,7 @@ Click **Run Analysis**. The results window shows:
   final Roth/pre-tax/taxable values, final net worth, deferred reserve and net
   after all taxes.
 - **Chart** — final net worth by strategy, with Penny's pick in gold.
+- **3D Map** — conversion and added-funds sensitivity surface with sweet spots.
 - **Detail View** — year-by-year RMD, taxable Social Security, conversion,
   MAGI, IRMAA, tax liability/paid/unpaid, spending and reconciliation columns.
 - **HTML Report**, **Excel Report**, **Export to CSV**, **Save Project**.
@@ -51,12 +52,13 @@ Click **Run Analysis**. The results window shows:
 python -m unittest discover tests -v
 ```
 
-Expected result: **98 tests, 0 failures**.
+Expected result: **107 tests, 0 failures**.
 
 The suite covers tax brackets, incremental conversion and gain tax, RMD
 withdrawal, pro-rata basis, scenario isolation, objective policies, cash-flow
-reconciliation, funding sources, external caps, deferred tax, the rule
-registry, persistence, the HTML/Excel reports, the mascot and GUI helpers.
+reconciliation, funding sources, external caps, deferred tax, the projection
+map, taxable contributions, the rule registry, persistence, the HTML/Excel
+reports, the mascot and GUI helpers.
 
 ## 5. Build the executable
 
@@ -78,6 +80,19 @@ does not need Python installed on the target machine.
 
 Policies intentionally differ. See `README.md` and `docs/TECHNICAL.md` for the
 full table and assumptions.
+
+## Using the 3D projection map
+
+Choose **3D Map** in the results window. Adjust **Max annual conversion** and
+**Grid points**, or add an **Extra annual funds** amount, then choose **Build
+Map**. The **3D Surface** tab shows projection year, annual conversion and
+after-tax net worth, colored by cumulative tax including IRMAA. The **Sweet
+Spots** tab lists the paths, with **Best net** and **Lowest tax** marked.
+
+Added funds are taxable contributions to the first taxable account (a synthetic
+one is used if the plan has none). Advisory and trading fees are not modeled;
+record them as expenses if needed. This is a sensitivity view, not a guarantee
+of future returns or tax law.
 
 ## What the numbers mean
 

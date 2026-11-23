@@ -647,29 +647,36 @@ class ConversionSimulator:
                      "Tax payment from external funds")
             return used
 
-        remaining_tax = max(0.0, tax_due)
         source = (scenario.tax_payment_source or "cash").strip().lower()
-        if source == "external":
-            remaining_tax -= take_external(remaining_tax)
-            remaining_tax -= take_cash(remaining_tax)
-            remaining_tax -= take_roth(remaining_tax)
-        elif source == "withhold":
-            remaining_tax -= take_roth(remaining_tax)
-            remaining_tax -= take_cash(remaining_tax)
-            remaining_tax -= take_external(remaining_tax)
-        elif source == "taxable":
-            remaining_tax -= take_taxable(remaining_tax)
-            remaining_tax -= take_cash(remaining_tax)
-            remaining_tax -= take_roth(remaining_tax)
-            remaining_tax -= take_external(remaining_tax)
-        else:
-            remaining_tax -= take_cash(remaining_tax)
-            remaining_tax -= take_roth(remaining_tax)
-            remaining_tax -= take_external(remaining_tax)
+        def settle_tax(amount: float) -> float:
+            """Pay a liability using the scenario's ordered, capped sources."""
+            remaining = max(0.0, amount)
+            if source == "external":
+                remaining -= take_external(remaining)
+                remaining -= take_cash(remaining)
+                remaining -= take_roth(remaining)
+            elif source == "withhold":
+                remaining -= take_roth(remaining)
+                remaining -= take_cash(remaining)
+                remaining -= take_external(remaining)
+            elif source == "taxable":
+                remaining -= take_taxable(remaining)
+                remaining -= take_cash(remaining)
+                remaining -= take_roth(remaining)
+                remaining -= take_external(remaining)
+            else:
+                remaining -= take_cash(remaining)
+                remaining -= take_roth(remaining)
+                remaining -= take_external(remaining)
+            return max(0.0, remaining)
 
-        # Taxable sales used to raise tax cash can realize additional gains.
-        # Add that second-order liability explicitly instead of dropping it.
-        if realized_gains > 0:
+        remaining_tax = settle_tax(tax_due)
+
+        # A taxable sale used to pay tax can itself realize a gain. Recalculate
+        # and settle that incremental liability until the feedback is below a
+        # cent. The cap prevents malformed calculator inputs from looping.
+        accounted_gain_tax = gain_tax
+        for _ in range(20):
             total_gain_tax = self.tax_calc.calculate_capital_gains_tax(
                 realized_gains,
                 ordinary_after + taxable_conversion,
@@ -679,14 +686,17 @@ class ConversionSimulator:
                 age=age,
                 spouse_age=spouse_age,
             )
-            extra_gain_tax = max(0.0, total_gain_tax - gain_tax)
-            if extra_gain_tax > 0:
-                tax_due += extra_gain_tax
-                remaining_tax += extra_gain_tax
-                result.notes.append(
-                    f"${extra_gain_tax:,.0f} of additional tax on gains from "
-                    "tax-funding sales remains payable."
-                )
+            extra_gain_tax = max(0.0, total_gain_tax - accounted_gain_tax)
+            if extra_gain_tax < 0.01:
+                break
+            accounted_gain_tax = total_gain_tax
+            tax_due += extra_gain_tax
+            remaining_tax += settle_tax(extra_gain_tax)
+        else:
+            result.notes.append(
+                "Taxable-sale tax funding reached the iteration limit; "
+                "review the remaining unpaid tax."
+            )
 
         taxes_unpaid = max(0.0, remaining_tax)
         result.total_tax_paid = tax_due
@@ -732,6 +742,10 @@ class ConversionSimulator:
             )
             account.current_balance = after
             if contribution:
+                # Contributions to a taxable account add to its cost basis.
+                # Without this, later sales would overstate realized gains.
+                if self._is_taxable(account):
+                    account.cost_basis += contribution
                 post("contribution", contribution, account.name,
                      "Annual contribution")
             post("growth", after - before - contribution, account.name,

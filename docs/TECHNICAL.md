@@ -3,8 +3,9 @@
 ## Architecture
 
 ```text
-PySimpleGUI wizard / results (src/gui.py)
+PySimpleGUI wizard / results / 3D map (src/gui.py)
         │
+        ├── projection_map.py (fixed-conversion grid, sweet spots, PNG surface)
         ├── theme.py + mascot.py + reports.py + excel_report.py
         │
 ConversionOptimizer (src/optimizer.py)
@@ -288,6 +289,31 @@ the registry is the provenance layer, not a second set of numbers.
 - A conversion with no Roth account creates a synthetic “Roth Conversion
   Account” using the weighted pre-tax growth rate.
 
+## 3D projection map
+
+`src/projection_map.py` is a sensitivity layer over the normal optimizer and
+simulator. Each requested annual conversion target is run as its own scenario
+with a fixed conversion, optional taxable added funds, and the base scenario's
+tax-funding and deferred-tax assumptions. A target above the available pre-tax
+balance is capped by the normal conversion policy; the map does not invent
+assets or tax payments.
+
+The surface coordinates are projection year, annual conversion and after-tax
+net worth. Color is cumulative tax liability including IRMAA. After-tax value
+for each year is:
+
+```text
+gross ending assets
+  - cumulative unpaid tax
+  - remaining pre-tax balance × deferred_tax_rate
+```
+
+Taxes already paid are already reflected in ending balances. Sweet spots are
+non-dominated points: no other grid point has both at least as much after-tax
+value and no more tax cost. Added funds go to the first taxable account, or a
+synthetic taxable account when none exists; they add to cost basis. Advisory
+and trading fees are not modeled.
+
 ## Reports
 
 ### HTML
@@ -318,7 +344,7 @@ dataclass defaults cover older files.
 
 ## Tests
 
-`python -m unittest discover tests -v` runs **98 tests** covering:
+`python -m unittest discover tests -v` runs **107 tests** covering:
 
 - 2026 federal/state tax, age-65 deductions, IRMAA boundaries, RMDs, pro-rata
 - Social Security provisional-income taxability
@@ -330,6 +356,7 @@ dataclass defaults cover older files.
 - spending, tax funding, withholding, external caps and unpaid tax
 - taxable cost basis and realized gains
 - ledger reconciliation and deferred-tax after-tax net worth
+- projection-map grid, Pareto sweet spots, taxable added funds and PNG rendering
 - rule registry status/coverage
 - objective policy uniqueness
 - ranking and after-tax comparison
@@ -338,8 +365,8 @@ dataclass defaults cover older files.
 
 Additional verification:
 
-- hidden-window smoke for the menu, all five wizard panels, results, strategy
-  picker and detail window
+- local visual capture of the menu, five wizard panels, results, 3D surface,
+  sweet-spot table and detail window (`python build/capture_ui.py`)
 - `python example_analysis.py`
 - PyInstaller build and frozen launch with the expected window title
 
@@ -362,6 +389,8 @@ Additional verification:
   available.
 - Short-term gains, wash sales, loss carryforwards, NIIT, AMT, QCD and estate
   modeling are absent.
+- The 3D map is a fixed-conversion sensitivity view; advisory/trading fees are
+  not modeled and added funds are taxable contributions.
 - No Monte Carlo or market volatility.
 - No spousal RMD/IRMAA synchronization beyond the 65+ count.
 - Spending cannot be funded automatically from pre-tax accounts.

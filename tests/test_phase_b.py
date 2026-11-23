@@ -186,6 +186,38 @@ class TestCashFlowAccounting(unittest.TestCase):
             delta=1,
         )
 
+    def test_taxable_tax_funding_settles_tax_on_its_own_gains(self):
+        result = ConversionSimulator(_client()).run_full_simulation(
+            _scenario(
+                annual_conversion_target=50_000,
+                max_conversion_allowed=50_000,
+                tax_payment_source="taxable",
+            ),
+            [
+                Account("IRA", "Traditional IRA", 50_000, growth_rate=0.0),
+                Account(
+                    "Brokerage",
+                    "Taxable Brokerage",
+                    100_000,
+                    cost_basis=0.0,
+                    growth_rate=0.0,
+                ),
+            ],
+            [],
+            Expenses(),
+        ).years[0]
+
+        self.assertGreater(result.realized_gains, 0)
+        self.assertAlmostEqual(result.taxes_unpaid, 0, delta=0.01)
+        self.assertAlmostEqual(
+            result.taxes_paid, result.total_tax_paid, delta=0.01
+        )
+        self.assertAlmostEqual(
+            result.beginning_assets + sum(e.amount for e in result.ledger),
+            result.ending_assets,
+            delta=0.01,
+        )
+
     def test_deferred_tax_reserve_reduces_after_tax_net_worth(self):
         strategy = ConversionSimulator(_client()).run_full_simulation(
             _scenario(deferred_tax_rate=0.22),
