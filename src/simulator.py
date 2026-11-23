@@ -300,6 +300,7 @@ class ConversionSimulator:
         scenario: ScenarioSettings,
         tax_year: int = 2026,
         irmaa_magi: Optional[float] = None,
+        annual_return_override: Optional[float] = None,
     ) -> ConversionResult:
         """Simulate one retirement year.
 
@@ -734,9 +735,11 @@ class ConversionSimulator:
         for account in self._account_list(accounts):
             before = account.current_balance
             contribution = max(0.0, account.annual_contribution or 0.0)
+            growth_rate = (account.growth_rate if annual_return_override is None
+                           else max(-1.0, float(annual_return_override)))
             after = self.calculate_account_growth(
                 before,
-                account.growth_rate,
+                growth_rate,
                 1,
                 contribution,
             )
@@ -970,22 +973,40 @@ class ConversionSimulator:
         current_year = datetime.now().year
         current_age = self.client.current_age
         magi_history: Dict[int, float] = {}
+        expense_multiplier = 1.0
+        expense_fields = (
+            "housing", "utilities", "food", "transportation", "healthcare",
+            "insurance", "discretionary", "other",
+        )
 
         for year in range(scenario.start_year, scenario.end_year + 1):
             age = current_age + (year - current_year)
+            path_index = year - scenario.start_year
 
             if age > 120:
                 break
 
+            annual_expenses = copy.deepcopy(expenses)
+            for field_name in expense_fields:
+                setattr(
+                    annual_expenses,
+                    field_name,
+                    getattr(expenses, field_name) * expense_multiplier,
+                )
+            return_path = scenario.annual_return_path or []
+            return_override = (
+                return_path[path_index] if path_index < len(return_path) else None
+            )
             result = self.simulate_year(
                 year=year,
                 age=age,
                 accounts=sim_accounts,
                 income_streams=income_streams,
-                expenses=expenses,
+                expenses=annual_expenses,
                 scenario=scenario,
                 tax_year=year,
                 irmaa_magi=magi_history.get(year - IRMAA_LOOKBACK_YEARS),
+                annual_return_override=return_override,
             )
             magi_history[year] = result.magi
 
@@ -1002,6 +1023,10 @@ class ConversionSimulator:
             strategy.total_taxable_withdrawals += result.taxable_withdrawals
             strategy.total_realized_gains += result.realized_gains
             strategy.total_external_tax_funding += result.external_tax_funding
+
+            inflation_path = scenario.annual_inflation_path or []
+            if path_index < len(inflation_path):
+                expense_multiplier *= max(0.0, 1.0 + inflation_path[path_index])
 
         if strategy.years:
             last_year = strategy.years[-1]

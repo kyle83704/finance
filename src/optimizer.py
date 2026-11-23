@@ -106,6 +106,10 @@ class ConversionOptimizer:
                 tax_payment_source=base_scenario.tax_payment_source,
                 external_tax_funding=base_scenario.external_tax_funding,
                 deferred_tax_rate=base_scenario.deferred_tax_rate,
+                annual_return_path=base_scenario.annual_return_path,
+                annual_inflation_path=base_scenario.annual_inflation_path,
+                return_method=base_scenario.return_method,
+                return_path_label=base_scenario.return_path_label,
             )
             scenarios.append(scenario)
 
@@ -126,6 +130,10 @@ class ConversionOptimizer:
                     tax_payment_source=base_scenario.tax_payment_source,
                     external_tax_funding=base_scenario.external_tax_funding,
                     deferred_tax_rate=base_scenario.deferred_tax_rate,
+                    annual_return_path=base_scenario.annual_return_path,
+                    annual_inflation_path=base_scenario.annual_inflation_path,
+                    return_method=base_scenario.return_method,
+                    return_path_label=base_scenario.return_path_label,
                 )
                 scenarios.append(scenario)
 

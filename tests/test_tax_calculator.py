@@ -94,6 +94,16 @@ class TestTaxCalculator(unittest.TestCase):
         # Divisor at 80 is 20.2
         expected = balance / 20.2
         self.assertAlmostEqual(rmd, expected, places=0)
+
+    def test_rmd_uses_current_uniform_lifetime_divisors_at_advanced_ages(self):
+        cases = {86: 15.2, 100: 6.4, 101: 6.0, 120: 2.0, 121: 2.0}
+        for age, divisor in cases.items():
+            with self.subTest(age=age):
+                self.assertAlmostEqual(
+                    self.calculator.calculate_rmd(100_000, age),
+                    100_000 / divisor,
+                    places=2,
+                )
     
     def test_rmd_before_age_73(self):
         """Test RMD before age 73 (should be 0)."""

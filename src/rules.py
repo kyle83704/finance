@@ -167,7 +167,8 @@ RULE_REGISTRY: List[RuleRecord] = [
         reference="SECURE 2.0 RMD age rules; IRS Uniform Lifetime Table",
         status="verified",
         limitations=(
-            "Divisor table currently ends at age 100; QCDs and account-specific "
+            "Uses Uniform Lifetime Table III through age 120+; the younger-spouse "
+            "Joint and Last Survivor exception, QCDs and account-specific "
             "aggregation rules are not modeled."
         ),
     ),

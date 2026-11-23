@@ -314,6 +314,36 @@ value and no more tax cost. Added funds go to the first taxable account, or a
 synthetic taxable account when none exists; they add to cost basis. Advisory
 and trading fees are not modeled.
 
+## Return-path simulation
+
+`src/market_simulation.py` creates annual paths and passes them to
+`ConversionSimulator.run_full_simulation()`; it does not duplicate tax or
+ledger logic. `ScenarioSettings.annual_return_path` overrides account growth
+for each covered projection year. `annual_inflation_path` escalates the next
+year's expense categories. If a path ends before the projection, later years
+fall back to each account's configured growth rate.
+
+Supported methods are contiguous historical CSV windows, circular block
+bootstrap, explicit stress paths, Cartesian sensitivity grids, and
+deterministic Sobol points mapped to empirical return quantiles. CSV columns
+are `year`, `portfolio_return`, `inflation_rate`, and `interest_rate`; the first
+two are required. Decimal rates and percent-marked values are accepted.
+
+`data/historical_returns_template.csv` documents the format but is not an
+authoritative market dataset. Dataset choice, asset allocation, fees and return
+construction remain user assumptions. Interest rates are retained as metadata
+but are not yet mapped to account returns.
+
+Agent-based modeling, system dynamics and discrete-event simulation are marked
+out of scope in the method registry. They require calibrated agents, feedback
+equations, or event queues that this annual household planner does not contain.
+
+Reference points: the [FRED API](https://fred.stlouisfed.org/docs/api/fred/)
+documents authoritative economic-series retrieval for a future opt-in importer;
+SciPy documents [Sobol low-discrepancy sequences](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.qmc.Sobol.html);
+and the Federal Reserve describes supervisory stress scenarios as hypothetical,
+not forecasts, in its [2026 scenario publication](https://www.federalreserve.gov/publications/2026-stress-test-scenarios.htm).
+
 ## Reports
 
 ### HTML
@@ -344,7 +374,7 @@ dataclass defaults cover older files.
 
 ## Tests
 
-`python -m unittest discover tests -v` runs **107 tests** covering:
+`python -m unittest discover tests -v` runs **119 tests** covering:
 
 - 2026 federal/state tax, age-65 deductions, IRMAA boundaries, RMDs, pro-rata
 - Social Security provisional-income taxability
@@ -357,6 +387,10 @@ dataclass defaults cover older files.
 - taxable cost basis and realized gains
 - ledger reconciliation and deferred-tax after-tax net worth
 - projection-map grid, Pareto sweet spots, taxable added funds and PNG rendering
+- historical CSV windows, block bootstrap, stress/sensitivity construction,
+  empirical Sobol paths, batch isolation and ledger integration
+- a deterministic 1,000-plan randomized audit of ledger, tax, funding,
+  non-negativity, isolation and finite-value invariants
 - rule registry status/coverage
 - objective policy uniqueness
 - ranking and after-tax comparison

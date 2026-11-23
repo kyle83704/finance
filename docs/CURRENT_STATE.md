@@ -1,15 +1,18 @@
 # Current State
 
-Last checkpoint: **2026-11-23** (taxable-sale tax-funding settlement)
-Checkpoint purpose: record the tax-funding upgrade and current verified state.
+Last checkpoint: **2026-11-23** (return-path simulation engine)
+Checkpoint purpose: record the first historical/stress simulation milestone.
 
 ## Current objective
 
-The 2.3.0 Ledger edition remains intact. Taxable sales used to fund taxes now
-settle the additional capital-gains tax to a sub-cent fixed point when permitted
-funding remains, rather than leaving that second-order liability unpaid after
-one pass. The loop is capped at 20 iterations and preserves source ordering,
-the external-funding cap and ledger reconciliation.
+The 2.3.0 Ledger edition remains intact. A new return-path layer supports
+historical CSV windows, circular block bootstrap, explicit stress paths,
+sensitivity grids and empirical Sobol paths. Annual returns and inflation feed
+the existing simulator, preserving tax, funding and ledger behavior. ABM,
+system dynamics and DES are explicitly registered as out of scope.
+The deterministic 1,000-plan audit is now part of the suite. A primary-source
+review corrected outdated RMD divisors from age 86 onward and extended the IRS
+Uniform Lifetime Table through age 120+.
 
 ## Repository state
 
@@ -21,6 +24,9 @@ the external-funding cap and ledger reconciliation.
 - Push target: `origin/main` at `https://github.com/kyle83704/finance.git`.
 - Verified commits were pushed to `origin/main` on 2026-11-23 without a force
   push. The local `main` branch tracks `origin/main`.
+- Current return-path work is uncommitted: `src/market_simulation.py`,
+  `tests/test_market_simulation.py`, `data/historical_returns_template.csv`,
+  simulator/model/optimizer integration, and documentation updates.
 - Current release: `2.3.0` (`src/__init__.py`, GUI footer and docs agree).
 
 ## Verified implementation state
@@ -43,6 +49,11 @@ the external-funding cap and ledger reconciliation.
   not cumulative taxes already paid from assets.
 - Taxable annual contributions now add to `cost_basis`, preventing later sales
   from overstating realized gains.
+- Scenario return paths override annual account growth; inflation paths
+  escalate the following year's expenses. Batch paths start from independent
+  account copies and use the normal annual ledger.
+- IRS Publication 590-B Table III divisors are used through age 120+, including
+  15.2 at 86, 6.4 at 100, 6.0 at 101 and 2.0 at 120 and above.
 - 2026 federal and IRMAA records retain official source links in `src/rules.py`;
   future indexing, flat state tax and other limits remain labeled assumptions or
   unsupported areas.
@@ -84,8 +95,9 @@ the external-funding cap and ledger reconciliation.
 ## Checks actually run
 
 - `python -m compileall -q main.py src tests` — exit 0.
-- `python -m unittest discover tests -v` — **108 tests, 0 failures, `OK`**
-  on 2026-11-23, including the taxable-sale fixed-point regression.
+- `python -m unittest discover tests -v` — **119 tests, 0 failures, `OK`**
+  on 2026-11-23, including nine return-path tests, the 1,000-plan audit and
+  advanced-age RMD divisor boundaries.
 - `python example_analysis.py` — exit 0; 30-year projections and CSV export.
   - Log: `build/example_analysis.txt`
 - `python build/capture_ui.py` — exit 0; **eleven** real-window captures:
@@ -105,8 +117,8 @@ the external-funding cap and ledger reconciliation.
 - `python -m PyInstaller --noconfirm --clean main.spec` — exit 0.
   - Log: `build/farmer_penny_build.log`
   - Artifact: `dist/main.exe`
-  - Size: **80,388,165 bytes**
-  - SHA-256: `961467606955b67cba82d0e27089f0b44dcba3b172f35f0c3b383a9870d5eac3`
+  - Size: **80,395,787 bytes**
+  - SHA-256: `3fcf5934ca79a1826e3490c7fd0c99f04596d01c3d80aeda545aa7d274efc690`
 - Frozen launch check via `build/launch_check.ps1` — `LAUNCH_OK`; child window
   title `Roth Conversion Simulator`.
 
@@ -126,13 +138,19 @@ the external-funding cap and ledger reconciliation.
    assumption.
 7. Persistence has basic load validation but no full schema migration workflow.
 8. `build/capture_ui.py` is a local visual harness and is not packaged.
+9. Return-path controls and distribution summaries are not yet exposed in the
+   GUI. Interest-rate observations are metadata only, and one common path return
+   applies to every investment account in a projection year.
+10. The Uniform Lifetime Table is modeled through age 120+, but the Joint and
+    Last Survivor table for a sole-beneficiary spouse more than ten years
+    younger is unsupported.
 
 ## Exact next steps
 
-1. If extending the map, keep each new behavior in `src/projection_map.py` with a
-   focused test; do not duplicate tax laws in the renderer.
-2. Run `python -m unittest discover tests -v` before changing behavior, and
-   rebuild `dist/main.exe` after any source or help-text change.
+1. Add a bounded GUI workflow for choosing a CSV, method and run count, then
+   summarize path success/shortfall distributions without bypassing the ledger.
+2. Add account-class return mapping before using imported interest rates.
+3. Run the full suite and rebuild `dist/main.exe` after GUI integration.
 
 ## Relevant paths
 
@@ -140,6 +158,7 @@ the external-funding cap and ledger reconciliation.
 main.py
 src/gui.py
 src/projection_map.py
+src/market_simulation.py
 src/simulator.py
 src/tax_calculator.py
 src/constants.py

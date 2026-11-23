@@ -9,12 +9,12 @@
 | Version | 2.3.0 (Ledger edition) |
 | Python | 3.13.17 |
 | UI | PySimpleGUI 4.60.5.1 |
-| Tests | **108/108 passing** |
+| Tests | **119/119 passing** |
 | GUI capture | Real menu, 5 wizard panels, comparison, balances, 3D map surface, sweet spots, detail |
 | Example analysis | Exit 0 |
 | Packaged executable | `dist/main.exe` |
-| Executable size | 80,388,165 bytes |
-| SHA-256 | `961467606955b67cba82d0e27089f0b44dcba3b172f35f0c3b383a9870d5eac3` |
+| Executable size | 80,395,787 bytes |
+| SHA-256 | `3fcf5934ca79a1826e3490c7fd0c99f04596d01c3d80aeda545aa7d274efc690` |
 | Frozen launch | Window title `Roth Conversion Simulator` |
 
 Push authorized for this verified build on 2026-11-23.
@@ -106,13 +106,13 @@ not packaged or part of the test suite.
 ## Measured verification
 
 - Compile: exit 0.
-- Tests: **108 tests, 0 failures**.
+- Tests: **119 tests, 0 failures**.
 - Example: exit 0; 30-year projections completed; CSV written;
   log `build/example_analysis.txt`.
 - GUI capture: exit 0; eleven real-window screenshots in `build/`.
 - PyInstaller: exit 0.
-- Artifact: `dist/main.exe`, 80,388,165 bytes.
-- SHA-256: `961467606955b67cba82d0e27089f0b44dcba3b172f35f0c3b383a9870d5eac3`.
+- Artifact: `dist/main.exe`, 80,395,787 bytes.
+- SHA-256: `3fcf5934ca79a1826e3490c7fd0c99f04596d01c3d80aeda545aa7d274efc690`.
 - Frozen launch: `LAUNCH_OK`; child GUI window title
   `Roth Conversion Simulator`.
 

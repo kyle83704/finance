@@ -21,6 +21,8 @@ investment advice.
   ledger, growth and reconciliation.
 - `src/projection_map.py` — fixed-conversion sensitivity grid, sweet-spot logic
   and the 3D PNG surface.
+- `src/market_simulation.py` — historical, bootstrap, stress, sensitivity and
+  empirical Sobol return paths feeding the normal simulator.
 - `src/tax_calculator.py` — 2026 federal/state tax, Social Security, IRMAA,
   RMD, pro-rata conversion tax and capital-gains tax.
 - `src/constants.py` — numeric tax tables, IRMAA, RMD divisors and account groups.
@@ -28,7 +30,7 @@ investment advice.
 - `src/models.py` — dataclasses, ledger entries and JSON project persistence.
 - `src/optimizer.py` — objective policies, scenario generation and comparison.
 - `src/reports.py`, `src/excel_report.py` — self-contained HTML and Excel reports.
-- `tests/` — 107 tests; `tests/test_phase_b.py` covers cash flow and funding and
+- `tests/` — 119 tests; `tests/test_phase_b.py` covers cash flow and funding and
   `tests/test_projection_map.py` covers the map and added funds.
 - `docs/CURRENT_STATE.md` — resumable checkpoint.
 - `docs/DECISIONS.md` — architectural/modeling decisions.
@@ -45,9 +47,9 @@ python example_analysis.py
 python -m PyInstaller --noconfirm --clean main.spec
 ```
 
-Current measured result (2026-11-23): 108 tests, `OK`. Packaging uses
-`main.spec`; the artifact is `dist/main.exe` (80,388,165 bytes; SHA-256
-`961467606955b67cba82d0e27089f0b44dcba3b172f35f0c3b383a9870d5eac3`). Do not
+Current measured result (2026-11-23): 119 tests, `OK`. Packaging uses
+`main.spec`; the artifact is `dist/main.exe` (80,395,787 bytes; SHA-256
+`3fcf5934ca79a1826e3490c7fd0c99f04596d01c3d80aeda545aa7d274efc690`). Do not
 push without an explicit request.
 
 ## Coding and verification requirements

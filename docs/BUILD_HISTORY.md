@@ -5,6 +5,19 @@ history, earlier artifacts or past verification claims are relevant. The full
 raw log remains in [`../BUILD_LOGS.md`](../BUILD_LOGS.md); this file is the
 compact archive index.
 
+## Return-path engine build (2026-11-23)
+
+**Basis:** `6a99cca` plus uncommitted return-path engine and documentation work.
+
+- Compile check passed.
+- Full suite: 117/117 passing.
+- `example_analysis.py` completed successfully.
+- PyInstaller build completed successfully.
+- `dist/main.exe`: 80,395,787 bytes; SHA-256
+  `3fcf5934ca79a1826e3490c7fd0c99f04596d01c3d80aeda545aa7d274efc690`.
+- Frozen launch: `LAUNCH_OK`; title `Roth Conversion Simulator`.
+- No commit or push performed.
+
 ## Taxable-sale settlement revalidation (2026-11-23)
 
 **Basis:** `8f9e32b` plus the existing uncommitted UI/map/mascot work and the

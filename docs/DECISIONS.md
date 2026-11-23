@@ -293,6 +293,51 @@ iteration uses the authoritative calculator and keeps external funding capped.
 
 **Status:** Active.
 
+## D-018 — Return paths feed the existing annual ledger engine
+
+**Decision:** Implement historical windows, circular block bootstrap, explicit
+stress paths, sensitivity grids and empirical Sobol paths in
+`src/market_simulation.py`. Carry annual returns and inflation on
+`ScenarioSettings`; run every path through `ConversionSimulator` rather than
+creating a second cash-flow or tax model.
+
+Historical data is user-supplied CSV. Interest-rate observations are preserved
+as metadata until an account-level rate mapping exists. Agent-based modeling,
+system dynamics and discrete-event simulation are registered as out of scope.
+
+**Why:** Annual return paths are directly relevant to retirement sequence risk
+and can reuse all accounting invariants. ABM, system dynamics and DES require
+calibrated behavioral, feedback or event models absent from this household tax
+planner; a label without those models would be misleading.
+
+**Alternatives:** Embed a static market dataset; silently fetch data; build a
+parallel simulator; claim all requested method families as implemented.
+
+**Tradeoff:** The engine and import API are available before GUI controls and
+result distributions. A common return currently applies to every investment
+account for a path year, and interest rates do not drive account-specific
+returns.
+
+**Status:** Active.
+
+## D-019 — Use the current full Uniform Lifetime Table
+
+**Decision:** Use IRS Publication 590-B Table III divisors through age 120 and
+apply the 120+ divisor of 2.0 above that age. Keep the younger-spouse Joint and
+Last Survivor exception explicitly unsupported.
+
+**Why:** The prior constants switched to outdated divisors at age 86 and ended
+at age 100, after which the calculator defaulted to 1.0 and overstated RMDs.
+
+**Alternatives:** Stop projections at age 100; retain the fallback; implement
+the spouse-beneficiary exception without collecting beneficiary facts.
+
+**Tradeoff:** Table III is correct for the modeled default population, but a
+sole-beneficiary spouse more than ten years younger requires Table II and is
+not yet supported.
+
+**Status:** Active.
+
 ## Superseded decision summary
 
 | Superseded choice | Replacement |

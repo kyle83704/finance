@@ -94,6 +94,10 @@ class ScenarioSettings:
     tax_payment_source: str = "cash"  # cash, withhold, taxable, external
     external_tax_funding: float = 0.0  # Explicit external cash available for taxes
     deferred_tax_rate: float = 0.22  # Assumption for tax on remaining pre-tax value
+    annual_return_path: Optional[List[float]] = None
+    annual_inflation_path: Optional[List[float]] = None
+    return_method: str = "fixed"
+    return_path_label: str = "Fixed account rates"
 
 
 @dataclass

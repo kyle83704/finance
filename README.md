@@ -45,6 +45,8 @@ Current release: **2.3.0 (Ledger edition)**
 - JSON project save/load.
 - 3D projection map from the results window, with conversion and added-funds
   controls and Pareto sweet spots.
+- Return-path engine for historical CSV backtests, block bootstrap resampling,
+  explicit stress paths, sensitivity grids and empirical Sobol sampling.
 - CSV, HTML and Excel exports from the results window.
 
 ### Modeling
@@ -91,6 +93,25 @@ is used when none exists); the contribution adds to cost basis.
 After-tax value subtracts unpaid tax and the deferred-tax reserve on remaining
 pre-tax assets. Advisory and trading fees are not modeled; enter them as living
 expenses if needed. Added funds are taxable contributions, not a deduction.
+
+### Return-path analysis
+
+`src/market_simulation.py` supplies annual return and inflation paths to the
+same tax, cash-flow and ledger simulator used by ordinary projections. It can
+load contiguous historical windows from CSV, resample observed blocks, build
+hypothetical stress paths, create sensitivity grids, and map Sobol points to
+the empirical observed-return distribution. Batch helpers run every path from
+the same untouched starting accounts.
+
+Use `data/historical_returns_template.csv` as the import format. It is an
+example, not verified market history. The required columns are `year` and
+`portfolio_return`; optional `inflation_rate` escalates the following year's
+expenses and `interest_rate` is retained as metadata. Values may be decimals or
+percentages such as `-0.10` or `-10%`.
+
+Agent-based, system-dynamics and discrete-event methods are explicitly marked
+out of scope: Penny has no calibrated traders, macro feedback equations or
+operational event queue. They are not represented as working simulations.
 
 ## Install
 
@@ -163,7 +184,7 @@ finance/
 │   ├── mascot.py               # Penny rendered to PNG/data URI
 │   ├── reports.py              # Self-contained HTML report and rule registry
 │   └── excel_report.py         # Formatted Excel workbook with chart
-├── tests/                      # 107 automated tests
+├── tests/                      # 119 automated tests
 ├── docs/TECHNICAL.md           # Algorithms, invariants and limits
 ├── main.spec                   # PyInstaller build configuration
 ├── requirements.txt
@@ -206,6 +227,8 @@ This is an educational planner, not tax, legal or investment advice.
 - The deferred-tax rate is a planning assumption, not a prediction of future law.
 - The 3D projection map does not model advisory or trading fees; added funds are
   taxable contributions and no deduction is assumed.
-- No Monte Carlo, market volatility or tax-law change simulation.
+- Historical inputs are user-supplied; Penny does not silently fetch or claim
+  an authoritative market dataset. Interest-rate observations are not yet
+  mapped to account returns. Tax-law change simulation remains unsupported.
 
 Always confirm conversion decisions with a qualified tax professional.

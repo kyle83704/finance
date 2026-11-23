@@ -346,7 +346,9 @@ class TaxCalculator:
         if age < start_age or account_balance <= 0:
             return 0.0
 
-        divisor = RMD_AGE_MULTIPLIERS.get(age, 1.0)
+        divisor = RMD_AGE_MULTIPLIERS.get(
+            age, 2.0 if age >= 120 else 1.0
+        )
         if divisor <= 0:
             return 0.0
 

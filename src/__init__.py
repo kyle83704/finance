@@ -16,6 +16,7 @@ from src.models import (
 from src.tax_calculator import TaxCalculator
 from src.simulator import ConversionSimulator
 from src.optimizer import ConversionOptimizer
+from src.market_simulation import ReturnPath, HistoricalObservation
 
 __all__ = [
     "ClientProfile",
@@ -28,4 +29,6 @@ __all__ = [
     "TaxCalculator",
     "ConversionSimulator",
     "ConversionOptimizer",
+    "ReturnPath",
+    "HistoricalObservation",
 ]
